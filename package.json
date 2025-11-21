@@ -178,7 +178,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint .",
-    "package": "npx @vscode/vsce package --no-yarn"
+    "package": "npx @vscode/vsce package"
   },
   "devDependencies": {
     "@types/lodash": "^4.14.175",
