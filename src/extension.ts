@@ -99,8 +99,22 @@ export function activate(context: vscode.ExtensionContext): void {
         shouldUpdateApiKey = choice.value === 'apiKey' || choice.value === 'both';
 
       } else if (existingUrl && !existingApiKey) {
-        // URL exists, just need API key
-        vscode.window.showInformationMessage(`Redmine URL is already set to: ${existingUrl}`);
+        // URL exists, just need API key - but let them update URL too
+        const choice = await vscode.window.showQuickPick([
+          { label: '$(check) Keep Current URL', description: existingUrl, value: 'keep' },
+          { label: '$(link) Change URL', value: 'change' }
+        ], {
+          placeHolder: 'Your Redmine URL is configured. Do you want to change it?'
+        });
+
+        if (!choice) return;
+
+        if (choice.value === 'change') {
+          url = await promptForUrl(existingUrl);
+          if (!url) return;
+          await config.update("url", url, vscode.ConfigurationTarget.WorkspaceFolder);
+        }
+
         shouldUpdateApiKey = true;
 
       } else if (!existingUrl && existingApiKey) {
