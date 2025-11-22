@@ -11,19 +11,11 @@ export enum ProjectsViewStyle {
 
 export class ProjectsTree
   implements vscode.TreeDataProvider<RedmineProject | Issue> {
-  server: RedmineServer;
+  server?: RedmineServer;
   viewStyle: ProjectsViewStyle;
   projects: RedmineProject[] | null = null;
   constructor() {
-    const config = vscode.workspace.getConfiguration(
-      "redmine"
-    ) as RedmineConfig;
-    this.server = new RedmineServer({
-      address: config.url,
-      key: config.apiKey,
-      additionalHeaders: config.additionalHeaders,
-      rejectUnauthorized: config.rejectUnauthorized,
-    });
+    // Don't initialize server here - will be set via setServer() when config is ready
     this.viewStyle = ProjectsViewStyle.LIST;
   }
 
@@ -56,6 +48,10 @@ export class ProjectsTree
   async getChildren(
     projectOrIssue?: RedmineProject | Issue
   ): Promise<(RedmineProject | Issue)[]> {
+    if (!this.server) {
+      return [];
+    }
+
     if (
       projectOrIssue !== null &&
       projectOrIssue !== undefined &&
