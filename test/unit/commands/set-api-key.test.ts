@@ -23,15 +23,16 @@ describe("setApiKey command", () => {
       index: 0,
     };
 
-    // @ts-ignore - workspace mock
+    // @ts-expect-error - workspace mock for testing
     vscode.workspace.workspaceFolders = [mockFolder];
 
     const showInputBoxSpy = vi
       .spyOn(vscode.window, "showInputBox")
       .mockResolvedValue("test-key-123");
-    const showInfoSpy = vi
-      .spyOn(vscode.window, "showInformationMessage")
-      .mockResolvedValue(undefined);
+
+    vi.spyOn(vscode.window, "showInformationMessage").mockResolvedValue(
+      undefined
+    );
 
     await setApiKey(mockContext);
 

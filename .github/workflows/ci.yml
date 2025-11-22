@@ -28,7 +28,7 @@ jobs:
 
       - name: Check coverage threshold
         run: |
-          COVERAGE=$(npm run test:coverage --silent 2>&1 | grep -A1 "All files" | tail -1 | awk '{print $2}' | sed 's/%//')
+          COVERAGE=$(npm run test:coverage --silent 2>&1 | grep "All files" | awk '{print $4}')
           if (( $(echo "$COVERAGE < 60" | bc -l) )); then
             echo "Coverage ($COVERAGE%) is below 60% threshold"
             exit 1

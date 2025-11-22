@@ -77,9 +77,8 @@ export function activate(context: vscode.ExtensionContext): void {
         projectsTree.onDidChangeTreeData$.fire();
         myIssuesTree.onDidChangeTreeData$.fire();
       } catch (error) {
-        console.error("Failed to initialize Redmine server:", error);
         vscode.window.showErrorMessage(
-          `Failed to connect to Redmine: ${error}`
+          `Failed to initialize Redmine server: ${error}`
         );
       }
     } else {
@@ -433,7 +432,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const registerCommand = (
     name: string,
-    action: (props: ActionProperties, ...args: any[]) => void | Promise<void>
+    action: (
+      props: ActionProperties,
+      ...args: unknown[]
+    ) => void | Promise<void>
   ) => {
     context.subscriptions.push(
       vscode.commands.registerCommand(

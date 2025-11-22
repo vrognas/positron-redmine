@@ -13,7 +13,7 @@ export class RedmineSecretManager {
     try {
       return await this.context.secrets.get(key);
     } catch (err) {
-      console.error("Failed to retrieve API key:", err);
+      vscode.window.showErrorMessage(`Failed to retrieve API key: ${err}`);
       return undefined;
     }
   }
