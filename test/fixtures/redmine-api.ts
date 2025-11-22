@@ -1,30 +1,59 @@
-import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
+import { EventEmitter } from 'events';
 
-export const redmineHandlers = [
-  http.get('http://localhost:3000/issues.json', () => {
-    return HttpResponse.json({
-      issues: [
-        {
-          id: 123,
-          subject: 'Test issue',
-          status: { id: 1, name: 'New' },
-          tracker: { id: 1, name: 'Bug' },
-          author: { id: 1, name: 'John Doe' },
-          project: { id: 1, name: 'Test Project' },
-        },
-      ],
-      total_count: 1,
-    });
-  }),
+export function createMockResponse(statusCode: number, data: any) {
+  const response = new EventEmitter() as any;
+  response.statusCode = statusCode;
+  response.statusMessage = 'OK';
 
-  http.put('http://localhost:3000/issues/:id.json', () => {
-    return HttpResponse.json({ success: true });
-  }),
+  setTimeout(() => {
+    response.emit('data', Buffer.from(JSON.stringify(data)));
+    response.emit('end');
+  }, 0);
 
-  http.post('http://localhost:3000/time_entries.json', () => {
-    return HttpResponse.json({ time_entry: { id: 1 } });
-  }),
-];
+  return response;
+}
 
-export const mockServer = setupServer(...redmineHandlers);
+export function mockHttpRequest(options: any, callback: any) {
+  const request = new EventEmitter() as any;
+  request.end = function (data?: Buffer) {
+    const path = options.path || '/';
+
+    let response;
+
+    // GET /issues.json?status_id=open&assigned_to_id=me
+    if (options.method === 'GET' && path.includes('/issues.json')) {
+      response = createMockResponse(200, {
+        issues: [
+          {
+            id: 123,
+            subject: 'Test issue',
+            status: { id: 1, name: 'New' },
+            tracker: { id: 1, name: 'Bug' },
+            author: { id: 1, name: 'John Doe' },
+            project: { id: 1, name: 'Test Project' },
+          },
+        ],
+        total_count: 1,
+      });
+    }
+    // PUT /issues/:id.json
+    else if (options.method === 'PUT' && path.match(/\/issues\/\d+\.json/)) {
+      response = createMockResponse(200, { success: true });
+    }
+    // POST /time_entries.json
+    else if (options.method === 'POST' && path.includes('/time_entries.json')) {
+      response = createMockResponse(200, { time_entry: { id: 1 } });
+    }
+    else {
+      response = createMockResponse(404, { error: 'Not found' });
+    }
+
+    callback(response);
+  };
+  request.on = function (event: string, handler: any) {
+    EventEmitter.prototype.on.call(this, event, handler);
+    return this;
+  };
+
+  return request;
+}
