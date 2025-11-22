@@ -2,7 +2,7 @@
   "name": "positron-redmine",
   "displayName": "Redmine for Positron",
   "description": "Redmine project management integration for Positron IDE and VS Code",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "publisher": "vrognas",
   "license": "MIT",
   "icon": "logo.png",
@@ -11,8 +11,9 @@
     "url": "https://github.com/vrognas/positron-redmine.git"
   },
   "engines": {
-    "vscode": "^1.74.0",
-    "positron": "^2025.06.0"
+    "vscode": "^1.85.0",
+    "positron": "^2025.06.0",
+    "node": ">=20.0.0"
   },
   "categories": [
     "Other"
@@ -20,6 +21,10 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "redmine.setApiKey",
+        "title": "Redmine: Set API Key"
+      },
       {
         "command": "redmine.listOpenIssuesAssignedToMe",
         "title": "Redmine: List open issues assigned to me"
@@ -139,7 +144,8 @@
         },
         "redmine.apiKey": {
           "type": "string",
-          "description": "API Key",
+          "description": "DEPRECATED: Use 'Redmine: Set API Key' command instead",
+          "deprecationMessage": "API keys now stored in VS Code secrets. Run 'Redmine: Set API Key'",
           "scope": "resource"
         },
         "redmine.rejectUnauthorized": {
