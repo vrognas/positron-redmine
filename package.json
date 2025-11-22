@@ -160,38 +160,38 @@
       "properties": {
         "redmine.url": {
           "type": "string",
-          "markdownDescription": "**Redmine server URL**\n\n⚠️ Changing/removing this requires reconfiguring API key\n\n**Storage:**\n- URL: Workspace settings (`.vscode/settings.json`)\n- API Key: Encrypted secrets (Windows Credential Manager / macOS Keychain / Linux libsecret)\n- API keys are machine-local and never synced",
+          "markdownDescription": "**Redmine server URL**\n\n⚠️ Changing/removing this requires reconfiguring API key\n\n**Storage:**\n- URL: User settings (`settings.json`)\n- API Key: Encrypted secrets (Windows Credential Manager / macOS Keychain / Linux libsecret)\n- API keys are machine-local and never synced",
           "examples": [
             "https://example.com",
             "http://example.com:8080",
             "https://example.com:8443/redmine",
             "http://example.com/redmine"
           ],
-          "scope": "resource"
+          "scope": "machine"
         },
         "redmine.apiKey": {
           "type": "string",
           "description": "DEPRECATED: Use 'Redmine: Set API Key' command instead",
           "deprecationMessage": "API keys now stored in VS Code secrets. Run 'Redmine: Set API Key'",
-          "scope": "resource"
+          "scope": "machine"
         },
         "redmine.rejectUnauthorized": {
           "type": "boolean",
           "description": "Pass rejectUnauthorized to https request options. Use only if your redmine instance has self-signed certificate!",
           "default": "false",
-          "scope": "resource"
+          "scope": "machine"
         },
         "redmine.identifier": {
           "type": "string",
           "description": "Project identifier in Redmine",
           "default": "",
-          "scope": "resource"
+          "scope": "machine"
         },
         "redmine.additionalHeaders": {
           "type": "object",
           "description": "Additional headers",
           "default": {},
-          "scope": "resource"
+          "scope": "machine"
         }
       }
     }

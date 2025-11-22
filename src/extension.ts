@@ -126,7 +126,7 @@ export function activate(context: vscode.ExtensionContext): void {
         if (choice.value === 'url' || choice.value === 'both') {
           url = await promptForUrl(existingUrl);
           if (!url) return;
-          await config.update("url", url, vscode.ConfigurationTarget.WorkspaceFolder);
+          await config.update("url", url, vscode.ConfigurationTarget.Global);
         }
 
         shouldUpdateApiKey = choice.value === 'apiKey' || choice.value === 'both';
@@ -145,7 +145,7 @@ export function activate(context: vscode.ExtensionContext): void {
         if (choice.value === 'change') {
           url = await promptForUrl(existingUrl);
           if (!url) return;
-          await config.update("url", url, vscode.ConfigurationTarget.WorkspaceFolder);
+          await config.update("url", url, vscode.ConfigurationTarget.Global);
         }
 
         shouldUpdateApiKey = true;
@@ -167,7 +167,7 @@ export function activate(context: vscode.ExtensionContext): void {
         // Start fresh
         url = await promptForUrl();
         if (!url) return;
-        await config.update("url", url, vscode.ConfigurationTarget.WorkspaceFolder);
+        await config.update("url", url, vscode.ConfigurationTarget.Global);
         shouldUpdateApiKey = true;
 
       } else {
@@ -176,7 +176,7 @@ export function activate(context: vscode.ExtensionContext): void {
           'Secure Configuration',
           {
             modal: true,
-            detail: 'How your credentials are stored:\n\n• URL: Workspace settings (.vscode/settings.json)\n• API Key: Encrypted secrets storage\n  - Windows: Credential Manager\n  - macOS: Keychain\n  - Linux: libsecret\n\nAPI keys are machine-local and never synced to the cloud.'
+            detail: 'How your credentials are stored:\n\n• URL: User settings (settings.json)\n• API Key: Encrypted secrets storage\n  - Windows: Credential Manager\n  - macOS: Keychain\n  - Linux: libsecret\n\nAPI keys are machine-local and never synced to the cloud.'
           },
           'Continue',
           'Cancel'
@@ -186,7 +186,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
         url = await promptForUrl();
         if (!url) return;
-        await config.update("url", url, vscode.ConfigurationTarget.WorkspaceFolder);
+        await config.update("url", url, vscode.ConfigurationTarget.Global);
         shouldUpdateApiKey = true;
       }
 
