@@ -7,14 +7,14 @@ describe("RedmineSecretManager", () => {
   let manager: RedmineSecretManager;
 
   beforeEach(() => {
-    context = ({
+    context = {
       secrets: {
         get: vi.fn(),
         store: vi.fn(),
         delete: vi.fn(),
         onDidChange: vi.fn(),
       },
-    } as unknown) as vscode.ExtensionContext;
+    } as unknown as vscode.ExtensionContext;
 
     manager = new RedmineSecretManager(context);
   });

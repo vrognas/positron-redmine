@@ -6,14 +6,14 @@ describe("setApiKey command", () => {
   let mockContext: vscode.ExtensionContext;
 
   beforeEach(() => {
-    mockContext = ({
+    mockContext = {
       secrets: {
         get: vi.fn(),
         store: vi.fn(),
         delete: vi.fn(),
         onDidChange: vi.fn(),
       },
-    } as unknown) as vscode.ExtensionContext;
+    } as unknown as vscode.ExtensionContext;
   });
 
   it("should prompt for API key", async () => {
