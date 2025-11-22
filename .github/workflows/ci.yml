@@ -76,7 +76,7 @@ jobs:
 
       - name: Smoke test VSIX
         run: |
-          npx tsc test/smoke/*.ts --outDir out/test/smoke --skipLibCheck
+          npx tsc test/smoke/activation.test.ts --outDir out/test/smoke --skipLibCheck
           npx --yes @vscode/test-cli
 
       - name: Check VSIX size

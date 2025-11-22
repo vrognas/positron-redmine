@@ -17,8 +17,8 @@ echo "Validating commit messages from $BASE_SHA to $HEAD_SHA"
 
 FAILED=0
 
-# Get all commits in range
-git log --format="%H" "$BASE_SHA..$HEAD_SHA" | while read -r commit; do
+# Get all commits in range - use process substitution to avoid subshell
+while read -r commit; do
   echo "Checking commit: $commit"
 
   # Get commit message
@@ -44,7 +44,7 @@ git log --format="%H" "$BASE_SHA..$HEAD_SHA" | while read -r commit; do
       fi
     done <<< "$BODY"
   fi
-done
+done < <(git log --format="%H" "$BASE_SHA..$HEAD_SHA")
 
 if [ "$FAILED" -eq 1 ]; then
   echo ""
