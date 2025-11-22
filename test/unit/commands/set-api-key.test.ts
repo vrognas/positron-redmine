@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as vscode from 'vscode';
-import { setApiKey } from '../../../src/commands/set-api-key';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as vscode from "vscode";
+import { setApiKey } from "../../../src/commands/set-api-key";
 
-describe('setApiKey command', () => {
+describe("setApiKey command", () => {
   let mockContext: vscode.ExtensionContext;
 
   beforeEach(() => {
@@ -16,18 +16,23 @@ describe('setApiKey command', () => {
     } as unknown as vscode.ExtensionContext;
   });
 
-  it('should prompt for API key', async () => {
+  it("should prompt for API key", async () => {
     const mockFolder = {
-      uri: vscode.Uri.parse('file:///home/user/project'),
-      name: 'test-project',
+      uri: vscode.Uri.parse("file:///home/user/project"),
+      name: "test-project",
       index: 0,
     };
 
-    // @ts-ignore - workspace mock
+    // @ts-expect-error - workspace mock for testing
     vscode.workspace.workspaceFolders = [mockFolder];
 
-    const showInputBoxSpy = vi.spyOn(vscode.window, 'showInputBox').mockResolvedValue('test-key-123');
-    const showInfoSpy = vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+    const showInputBoxSpy = vi
+      .spyOn(vscode.window, "showInputBox")
+      .mockResolvedValue("test-key-123");
+
+    vi.spyOn(vscode.window, "showInformationMessage").mockResolvedValue(
+      undefined
+    );
 
     await setApiKey(mockContext);
 

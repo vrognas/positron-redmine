@@ -4,10 +4,13 @@ import { resolve } from "node:path";
 export default defineConfig({
   test: {
     environment: "node",
+    fileParallelism: true,
+    isolate: false,
     alias: {
       vscode: resolve(__dirname, "./test/mocks/vscode.ts"),
     },
     include: ["test/**/*.test.ts"],
+    exclude: ["test/smoke/**/*.test.ts"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
