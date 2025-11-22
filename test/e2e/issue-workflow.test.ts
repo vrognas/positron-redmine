@@ -1,0 +1,201 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { EventEmitter } from "events";
+import * as http from "http";
+import * as vscode from "vscode";
+import { RedmineServer } from "../../src/redmine/redmine-server";
+import { IssueController } from "../../src/controllers/issue-controller";
+import listOpenIssuesAssignedToMe from "../../src/commands/list-open-issues-assigned-to-me";
+import { Membership, IssueStatus } from "../../src/controllers/domain";
+
+vi.mock("vscode");
+
+let mockHttpResponses: any[] = [];
+let mockHttpResponseIndex = 0;
+
+vi.mock("http", async () => {
+  const actual = await vi.importActual<typeof http>("http");
+  return {
+    ...actual,
+    request: vi.fn((options, callback) => {
+      const request = new EventEmitter() as any;
+      request.end = function () {
+        const response = new EventEmitter() as any;
+        response.statusCode = 200;
+        response.statusMessage = "OK";
+
+        setTimeout(() => {
+          const responseData = mockHttpResponses[mockHttpResponseIndex] || null;
+          mockHttpResponseIndex++;
+          if (responseData) {
+            response.emit("data", Buffer.from(JSON.stringify(responseData)));
+          }
+          response.emit("end");
+        }, 0);
+
+        callback(response);
+      };
+      request.on = function (event: string, handler: any) {
+        EventEmitter.prototype.on.call(this, event, handler);
+        return this;
+      };
+      return request;
+    }),
+  };
+});
+
+describe("Issue Workflow E2E", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHttpResponses = [];
+    mockHttpResponseIndex = 0;
+    vi.mocked(vscode.window.withProgress).mockImplementation(
+      async (_options, callback) => callback({ report: vi.fn() } as any)
+    );
+  });
+
+  it("full list issues workflow with change status", async () => {
+    const mockIssue = {
+      id: 123,
+      subject: "Test Issue",
+      status: { id: 1, name: "New" },
+      tracker: { id: 1, name: "Bug" },
+      author: { id: 1, name: "Author" },
+      project: { id: 1, name: "Project" },
+      assigned_to: { id: 1, name: "User" },
+      description: "Test description",
+    };
+
+    // Setup HTTP responses: 1) getIssuesAssignedToMe, 2) getIssueStatuses, 3) setIssueStatus
+    mockHttpResponses = [
+      { issues: [mockIssue] },
+      { issue_statuses: [{ id: 2, name: "Resolved" }] },
+      {},
+    ];
+
+    const server = new RedmineServer({
+      address: "http://localhost:3000",
+      key: "testkey",
+    });
+
+    // Mock user selecting first issue
+    vi.mocked(vscode.window.showQuickPick)
+      .mockResolvedValueOnce({
+        label: "[Bug] (New) Test Issue by Author",
+        description: "Test description",
+        detail: "Issue #123 assigned to User",
+        fullIssue: mockIssue,
+      } as any)
+      // Mock selecting "Change status" action
+      .mockResolvedValueOnce({
+        action: "changeStatus",
+        label: "Change status",
+      } as any)
+      // Mock selecting new status
+      .mockResolvedValueOnce({
+        label: "Resolved",
+        fullIssue: { id: 2, name: "Resolved" },
+      } as any);
+
+    await listOpenIssuesAssignedToMe({ server, config: {} });
+
+    // Wait for async promise chains to complete
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(vscode.window.showQuickPick).toHaveBeenCalledTimes(3);
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      "Issue #123 status changed to Resolved"
+    );
+  });
+
+  it("add time entry workflow", async () => {
+    const mockIssue = {
+      id: 456,
+      subject: "Time Entry Test",
+      status: { id: 1, name: "In Progress" },
+      tracker: { id: 1, name: "Feature" },
+      author: { id: 1, name: "Author" },
+      project: { id: 1, name: "Project" },
+      assigned_to: { id: 1, name: "User" },
+    };
+
+    const mockActivity = { id: 9, name: "Development" };
+
+    // Setup HTTP responses: 1) getTimeEntryActivities, 2) addTimeEntry
+    mockHttpResponses = [
+      { time_entry_activities: [mockActivity] },
+      { time_entry: { id: 1 } },
+    ];
+
+    const server = new RedmineServer({
+      address: "http://localhost:3000",
+      key: "testkey",
+    });
+
+    const controller = new IssueController(mockIssue as any, server);
+
+    // Mock activity selection
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce({
+      label: "Development",
+      activity: mockActivity,
+    } as any);
+
+    // Mock hours|message input
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce("2.5|Fixed bug");
+
+    const activities = await server.getTimeEntryActivities();
+    controller.chooseTimeEntryType(activities.time_entry_activities);
+
+    // Wait for async promise chains to complete
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      "Time entry for issue #456 has been added."
+    );
+  });
+
+  it("quick update workflow", async () => {
+    const mockIssue = {
+      id: 789,
+      subject: "Quick Update Test",
+      status: { id: 1, name: "New" },
+      tracker: { id: 1, name: "Bug" },
+      author: { id: 1, name: "Author" },
+      project: { id: 1, name: "Project" },
+      assigned_to: { id: 1, name: "User" },
+    };
+
+    // Setup HTTP responses: 1) getMemberships, 2) getIssueStatuses, 3) applyQuickUpdate, 4) getIssueById
+    mockHttpResponses = [
+      { memberships: [{ user: { id: 2, name: "NewUser" } }] },
+      { issue_statuses: [{ id: 3, name: "Resolved" }] },
+      {},
+      {
+        issue: {
+          ...mockIssue,
+          assigned_to: { id: 2, name: "NewUser" },
+          status: { id: 3, name: "Resolved" },
+        },
+      },
+    ];
+
+    const server = new RedmineServer({
+      address: "http://localhost:3000",
+      key: "testkey",
+    });
+
+    const memberships = await server.getMemberships(1);
+    const statuses = await server.getIssueStatusesTyped();
+
+    const quickUpdate = {
+      issueId: 789,
+      message: "Fixed and reassigned",
+      assignee: new Membership(2, "NewUser"),
+      status: new IssueStatus(3, "Resolved"),
+    };
+
+    const result = await server.applyQuickUpdate(quickUpdate);
+
+    expect(result.isSuccessful()).toBe(true);
+    expect(result.differences).toHaveLength(0);
+  });
+});

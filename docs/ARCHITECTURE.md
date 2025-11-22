@@ -432,15 +432,27 @@ Migration handled in `src/extension.ts:96-129`.
 
 ## Testing Strategy
 
-**Current State**: No automated tests.
+**Current State**: 75 tests across unit and e2e suites, 93%+ coverage.
 
-**Recommended**:
+**Test Structure**:
 
-- Unit tests for `RedmineServer` methods (mock HTTP)
-- Integration tests for commands (mock VS Code API)
-- E2E tests with test Redmine instance
+- **Unit tests** (`test/unit/**/*.test.ts`): Component-level tests
+  - RedmineServer HTTP methods (mocked)
+  - Domain models & controllers
+  - Utilities & error handling
+  - URL parsing & validation
+- **E2E tests** (`test/e2e/**/*.test.ts`): Integration workflows
+  - Issue workflows (list → select → update)
+  - Project tree operations (LIST/TREE modes)
+  - Multi-server configuration
+  - Error propagation across layers
 
-**Test Framework**: Mocha (already in devDeps as `@types/mocha`).
+**Test Framework**: Vitest with v8 coverage.
+
+**Coverage Thresholds**:
+- Lines: 90%, Functions: 95%, Branches: 80%, Statements: 90%
+
+**Excluded from coverage**: extension.ts, tree providers, UI-heavy commands (require VS Code test environment).
 
 ## Future Extension Points
 

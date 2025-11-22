@@ -39,4 +39,40 @@ describe("setApiKey command", () => {
     expect(showInputBoxSpy).toHaveBeenCalled();
     expect(mockContext.secrets.store).toHaveBeenCalled();
   });
+
+  it("should handle user cancellation", async () => {
+    const mockFolder = {
+      uri: vscode.Uri.parse("file:///home/user/project"),
+      name: "test-project",
+      index: 0,
+    };
+
+    // @ts-expect-error - workspace mock for testing
+    vscode.workspace.workspaceFolders = [mockFolder];
+
+    vi.spyOn(vscode.window, "showInputBox").mockResolvedValue(undefined);
+
+    await setApiKey(mockContext);
+
+    expect(mockContext.secrets.store).not.toHaveBeenCalled();
+  });
+
+  it("should handle storage errors", async () => {
+    const mockFolder = {
+      uri: vscode.Uri.parse("file:///home/user/project"),
+      name: "test-project",
+      index: 0,
+    };
+
+    // @ts-expect-error - workspace mock for testing
+    vscode.workspace.workspaceFolders = [mockFolder];
+
+    vi.spyOn(vscode.window, "showInputBox").mockResolvedValue("test-key-123");
+    vi.spyOn(vscode.window, "showErrorMessage").mockResolvedValue(undefined);
+
+    const storeSpy = vi.fn().mockRejectedValue(new Error("Storage failed"));
+    mockContext.secrets.store = storeSpy;
+
+    await expect(setApiKey(mockContext)).rejects.toThrow("Storage failed");
+  });
 });

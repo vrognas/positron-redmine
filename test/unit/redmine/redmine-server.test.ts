@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { RedmineServer } from "../../../src/redmine/redmine-server";
 import * as http from "http";
 import { EventEmitter } from "events";
+import { QuickUpdate } from "../../../src/controllers/domain";
+import { IssueStatus } from "../../../src/controllers/domain";
+import { Membership } from "../../../src/controllers/domain";
 
 // Mock http.request
 vi.mock("http", async () => {
@@ -49,17 +52,33 @@ vi.mock("http", async () => {
                 ],
                 total_count: 1,
               };
-            } else if (path.match(/\/issues\/\d+\.json/)) {
+            } else if (path.match(/\/issues\/(\d+)\.json/)) {
+              const issueId = parseInt(path.match(/\/issues\/(\d+)\.json/)![1]);
               if (options.method === "GET") {
+                // Issue 999: wrong assignee (returns id 1 instead of requested)
+                // Issue 998: wrong status (returns id 1 instead of requested)
+                const assigned_to =
+                  issueId === 999
+                    ? { id: 1, name: "John Doe" }
+                    : { id: 2, name: "Jane Doe" };
+                const status =
+                  issueId === 998
+                    ? { id: 1, name: "New" }
+                    : { id: 2, name: "In Progress" };
+
                 data = {
                   issue: {
-                    id: 123,
+                    id: issueId,
                     subject: "Test issue",
-                    status: { id: 1, name: "New" },
+                    status:
+                      issueId === 123 ? { id: 1, name: "New" } : status,
                     tracker: { id: 1, name: "Bug" },
                     author: { id: 1, name: "John Doe" },
                     project: { id: 1, name: "Test Project" },
-                    assigned_to: { id: 1, name: "John Doe" },
+                    assigned_to:
+                      issueId === 123
+                        ? { id: 1, name: "John Doe" }
+                        : assigned_to,
                   },
                 };
               } else if (options.method === "PUT") {
@@ -69,9 +88,23 @@ vi.mock("http", async () => {
               options.method === "GET" &&
               path.includes("/projects.json")
             ) {
+              // Parse offset from query string
+              const offsetMatch = path.match(/offset=(\d+)/);
+              const offset = offsetMatch ? parseInt(offsetMatch[1]) : 0;
+              const limitMatch = path.match(/limit=(\d+)/);
+              const limit = limitMatch ? parseInt(limitMatch[1]) : 50;
+
+              // Return 3 projects across 2 pages (2 on first, 1 on second)
+              const allProjects = [
+                { id: 1, name: "Project One", identifier: "proj1" },
+                { id: 2, name: "Project Two", identifier: "proj2" },
+                { id: 3, name: "Project Three", identifier: "proj3" },
+              ];
+              const projects = allProjects.slice(offset, offset + limit);
+
               data = {
-                projects: [{ id: 1, name: "Test Project", identifier: "test" }],
-                total_count: 1,
+                projects,
+                total_count: 3,
               };
             } else if (
               options.method === "GET" &&
@@ -154,8 +187,8 @@ describe("RedmineServer", () => {
 
   it("should fetch projects", async () => {
     const projects = await server.getProjects();
-    expect(projects).toHaveLength(1);
-    expect(projects[0].toQuickPickItem().label).toBe("Test Project");
+    expect(projects).toHaveLength(3);
+    expect(projects[0].toQuickPickItem().label).toBe("Project One");
   });
 
   it("should fetch issue by id", async () => {
@@ -224,5 +257,35 @@ describe("RedmineServer", () => {
       key: "test-api-key",
     });
     expect(server.compare(server3)).toBe(false);
+  });
+
+  it("should detect assignee update failure in applyQuickUpdate", async () => {
+    const quickUpdate = new QuickUpdate(
+      999,
+      new IssueStatus(2, "In Progress"),
+      new Membership(2, "Jane Doe"),
+      "Update note"
+    );
+    const result = await server.applyQuickUpdate(quickUpdate);
+    expect(result.differences).toContain("Couldn't assign user");
+  });
+
+  it("should detect status update failure in applyQuickUpdate", async () => {
+    const quickUpdate = new QuickUpdate(
+      998,
+      new IssueStatus(2, "In Progress"),
+      new Membership(2, "Jane Doe"),
+      "Update note"
+    );
+    const result = await server.applyQuickUpdate(quickUpdate);
+    expect(result.differences).toContain("Couldn't update status");
+  });
+
+  it("should fetch all projects with pagination", async () => {
+    const projects = await server.getProjects();
+    expect(projects).toHaveLength(3);
+    expect(projects[0].toQuickPickItem().label).toBe("Project One");
+    expect(projects[1].toQuickPickItem().label).toBe("Project Two");
+    expect(projects[2].toQuickPickItem().label).toBe("Project Three");
   });
 });

@@ -4,6 +4,16 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ## [Unreleased]
 
+### Added
+
+- E2E test suite (issue workflows, tree operations, multi-server, error handling)
+- Enhanced unit tests (secret manager, redmine-project, pagination, error paths)
+
+### Changed
+
+- Test coverage: 76% → 93% statements, 68% → 81% branches, 83% → 98% functions
+- Coverage thresholds: 60% → 90% lines, 60% → 95% functions, 60% → 80% branches
+
 ## [3.0.2] - 2025-11-22
 
 ### Changed

@@ -36,4 +36,54 @@ describe("RedmineSecretManager", () => {
     const key = await manager.getApiKey(uri);
     expect(key).toBe("test-key-123");
   });
+
+  it("should delete API key", async () => {
+    const uri = vscode.Uri.parse("file:///home/user/project");
+    await manager.deleteApiKey(uri);
+
+    expect(context.secrets.delete).toHaveBeenCalledWith(
+      expect.stringContaining("redmine:")
+    );
+  });
+
+  it("should handle getApiKey error", async () => {
+    const uri = vscode.Uri.parse("file:///home/user/project");
+    vi.mocked(context.secrets.get).mockRejectedValue(new Error("Storage error"));
+    const showErrorSpy = vi.spyOn(vscode.window, "showErrorMessage");
+
+    const key = await manager.getApiKey(uri);
+
+    expect(key).toBeUndefined();
+    expect(showErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to retrieve API key")
+    );
+  });
+
+  it("should trigger callback for redmine key changes", () => {
+    const callback = vi.fn();
+    const mockListener = vi.fn();
+    vi.mocked(context.secrets.onDidChange).mockImplementation((handler) => {
+      mockListener.mockImplementation(handler);
+      return { dispose: vi.fn() };
+    });
+
+    manager.onSecretChanged(callback);
+    mockListener({ key: "redmine:test:apiKey:v1" });
+
+    expect(callback).toHaveBeenCalledWith("redmine:test:apiKey:v1");
+  });
+
+  it("should not trigger callback for non-redmine key changes", () => {
+    const callback = vi.fn();
+    const mockListener = vi.fn();
+    vi.mocked(context.secrets.onDidChange).mockImplementation((handler) => {
+      mockListener.mockImplementation(handler);
+      return { dispose: vi.fn() };
+    });
+
+    manager.onSecretChanged(callback);
+    mockListener({ key: "other:test:key" });
+
+    expect(callback).not.toHaveBeenCalled();
+  });
 });
