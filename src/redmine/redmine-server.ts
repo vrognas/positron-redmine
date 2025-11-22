@@ -160,7 +160,7 @@ export class RedmineServer {
         }
 
         // Using `doRequest` on the endpoints that return 204 should type as void/null
-        resolve((null as unknown) as T);
+        resolve(null as unknown as T);
       };
 
       const clientRequest = this.request(options, (incoming) => {
@@ -191,23 +191,21 @@ export class RedmineServer {
         return accumulator;
       }
 
-      const [totalCount, result]: [
-        number,
-        RedmineProject[]
-      ] = await this.doRequest<{
-        projects: Project[];
-        total_count: number;
-      }>(`/projects.json?limit=${limit}&offset=${offset}`, "GET").then(
-        ({ total_count, projects }) => [
-          total_count,
-          projects.map(
-            (proj) =>
-              new RedmineProject(this, {
-                ...proj,
-              })
-          ),
-        ]
-      );
+      const [totalCount, result]: [number, RedmineProject[]] =
+        await this.doRequest<{
+          projects: Project[];
+          total_count: number;
+        }>(`/projects.json?limit=${limit}&offset=${offset}`, "GET").then(
+          ({ total_count, projects }) => [
+            total_count,
+            projects.map(
+              (proj) =>
+                new RedmineProject(this, {
+                  ...proj,
+                })
+            ),
+          ]
+        );
 
       return req(offset + limit, limit, totalCount, accumulator.concat(result));
     };

@@ -9,7 +9,8 @@ export enum ProjectsViewStyle {
 }
 
 export class ProjectsTree
-  implements vscode.TreeDataProvider<RedmineProject | Issue> {
+  implements vscode.TreeDataProvider<RedmineProject | Issue>
+{
   server?: RedmineServer;
   viewStyle: ProjectsViewStyle;
   projects: RedmineProject[] | null = null;
