@@ -1,7 +1,17 @@
 import { EventEmitter } from "events";
 
-export function createMockResponse(statusCode: number, data: any) {
-  const response = new EventEmitter() as any;
+type MockRequestOptions = { path?: string; method?: string };
+type MockResponse = NodeJS.EventEmitter & {
+  statusCode: number;
+  statusMessage: string;
+};
+type MockRequest = NodeJS.EventEmitter & { end: (_data?: Buffer) => void };
+
+export function createMockResponse(
+  statusCode: number,
+  data: unknown
+): MockResponse {
+  const response = new EventEmitter() as MockResponse;
   response.statusCode = statusCode;
   response.statusMessage = "OK";
 
@@ -13,9 +23,12 @@ export function createMockResponse(statusCode: number, data: any) {
   return response;
 }
 
-export function mockHttpRequest(options: any, callback: any) {
-  const request = new EventEmitter() as any;
-  request.end = function (data?: Buffer) {
+export function mockHttpRequest(
+  options: MockRequestOptions,
+  callback: (response: MockResponse) => void
+): MockRequest {
+  const request = new EventEmitter() as MockRequest;
+  request.end = function (_data?: Buffer) {
     const path = options.path || "/";
 
     let response;
@@ -49,7 +62,7 @@ export function mockHttpRequest(options: any, callback: any) {
 
     callback(response);
   };
-  request.on = function (event: string, handler: any) {
+  request.on = function (event: string, handler: (...args: unknown[]) => void) {
     EventEmitter.prototype.on.call(this, event, handler);
     return this;
   };

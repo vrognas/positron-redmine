@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from "vitest";
-import * as vscode from "vscode";
 import listOpenIssues from "../../../src/commands/list-open-issues-assigned-to-me";
 
 describe("listOpenIssuesAssignedToMe", () => {

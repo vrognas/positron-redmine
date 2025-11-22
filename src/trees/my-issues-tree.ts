@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import { Issue } from "../redmine/models/issue";
 import { RedmineServer } from "../redmine/redmine-server";
-import { RedmineConfig } from "../definitions/redmine-config";
 
 export class MyIssuesTree implements vscode.TreeDataProvider<Issue> {
   server?: RedmineServer;

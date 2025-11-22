@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import { RedmineServer } from "../redmine/redmine-server";
-import { RedmineConfig } from "../definitions/redmine-config";
 import { RedmineProject } from "../redmine/redmine-project";
 import { Issue } from "../redmine/models/issue";
 
