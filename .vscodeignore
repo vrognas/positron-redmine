@@ -22,8 +22,6 @@ resources/**
 test/**
 coverage/**
 
-# Keep only essential docs
+# Exclude all markdown files except LICENSE
 *.md
-!README.md
-!CHANGELOG.md
 !LICENSE.md
