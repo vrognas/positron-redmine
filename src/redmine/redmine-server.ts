@@ -49,7 +49,7 @@ export class RedmineOptionsError extends Error {
 }
 
 export class RedmineServer {
-  options!: RedmineServerOptions;
+  options: RedmineServerOptions = {} as RedmineServerOptions;
 
   private timeEntryActivities: TimeEntryActivity[] | null = null;
 
@@ -108,9 +108,9 @@ export class RedmineServer {
       path: `${url.pathname}${path}`,
       method,
     };
-    if (data) {
-      options.headers!["Content-Length"] = data.length;
-      options.headers!["Content-Type"] = "application/json";
+    if (data && options.headers) {
+      options.headers["Content-Length"] = data.length;
+      options.headers["Content-Type"] = "application/json";
     }
 
     return new Promise((resolve, reject) => {
@@ -143,7 +143,7 @@ export class RedmineServer {
         }
 
         // TODO: Other errors handle
-        if (statusCode! >= 400) {
+        if (statusCode && statusCode >= 400) {
           reject(new Error(`Server returned ${statusMessage}`));
           return;
         }

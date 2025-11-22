@@ -62,7 +62,7 @@ export class ProjectsTree
       projectOrIssue instanceof RedmineProject
     ) {
       if (this.viewStyle === ProjectsViewStyle.TREE) {
-        const subprojects: (RedmineProject | Issue)[] = this.projects!.filter(
+        const subprojects: (RedmineProject | Issue)[] = (this.projects ?? []).filter(
           (project) => project.parent && project.parent.id === projectOrIssue.id
         );
         return subprojects.concat(

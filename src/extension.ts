@@ -41,12 +41,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const parseConfiguration = async (
     withPick = true,
     props?: ActionProperties,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...args: any[]
+    ...args: unknown[]
   ): Promise<{
     props?: ActionProperties;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    args: any[];
+    args: unknown[];
   }> => {
     if (!withPick) {
       return Promise.resolve({
@@ -130,20 +128,20 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const registerCommand = (
     name: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    action: (props: ActionProperties, ...args: any[]) => void
+    action: (props: ActionProperties, ...args: unknown[]) => void
   ) => {
     context.subscriptions.push(
       vscode.commands.registerCommand(
         `redmine.${name}`,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (withPick?: boolean, props?: ActionProperties, ...args: any[]) => {
+        (withPick?: boolean, props?: ActionProperties, ...args: unknown[]) => {
           parseConfiguration(withPick, props, ...args).then(
             ({ props, args }) => {
               // `props` should be set when `withPick` is `false`.
               // Otherwise `parseConfiguration` will take care of getting ActionProperties.
               // It's used mainly by trees that always pass props argument.
-              action(props!, ...args);
+              if (props) {
+                action(props, ...args);
+              }
             }
           );
         }
