@@ -64,4 +64,28 @@ Note: maintainers are working on `vscode-redmine` as a spare-time project, we wi
 
 ## Commit messages
 
-As mentioned in the Ground rules section, please follow [Conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) message styles. We support following types: `fix`, `feat`, `build`, `docs`, `style`, `refactor`, `perf`, `test`, `ci`.
+Commit messages are validated in CI (PRs only). Follow these rules:
+
+- **Subject line**: Max 50 characters
+- **Body lines**: Max 72 characters per line
+- **Format**: `Type: description`
+
+Supported types: `Add`, `Fix`, `Feat`, `Chore`, `Docs`, `Test`, `Refactor`, `Revert`
+
+**Examples:**
+```
+Fix: resolve authentication timeout issue
+
+Add: GitHub templates for bug reports and PRs
+
+Chore: update dependencies to latest versions
+```
+
+**If validation fails:**
+```bash
+# Amend the commit message
+git commit --amend
+
+# Force push (safe variant)
+git push --force-with-lease
+```
