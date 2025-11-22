@@ -204,8 +204,7 @@
     "package": "npx @vscode/vsce package",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:smoke": "vscode-test"
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/mocha": "^2.2.42",
@@ -214,7 +213,6 @@
     "@typescript-eslint/eslint-plugin": "^5.0.0",
     "@typescript-eslint/parser": "^5.0.0",
     "@vitest/coverage-v8": "^2.1.9",
-    "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.27.0",
     "eslint": "^8.0.0",
     "eslint-config-prettier": "^8.3.0",

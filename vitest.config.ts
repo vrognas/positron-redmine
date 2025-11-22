@@ -10,7 +10,6 @@ export default defineConfig({
       vscode: resolve(__dirname, "./test/mocks/vscode.ts"),
     },
     include: ["test/**/*.test.ts"],
-    exclude: ["test/smoke/**/*.test.ts"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
