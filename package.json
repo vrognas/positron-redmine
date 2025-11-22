@@ -17,16 +17,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:redmine.listOpenIssuesAssignedToMe",
-    "onCommand:redmine.openActionsForIssue",
-    "onCommand:redmine.newIssue",
-    "onCommand:redmine.openActionsForIssueUnderCursor",
-    "onCommand:redmine.changeDefaultServer",
-    "onView:redmine-explorer",
-    "onView:redmine-explorer-my-issues",
-    "onView:redmine-explorer-projects"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [

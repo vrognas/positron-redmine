@@ -15,7 +15,7 @@ export default async (
 
   vscode.window.withProgress(
     {
-      location: vscode.ProgressLocation.Window,
+      location: vscode.ProgressLocation.Notification,
     },
     (progress) => {
       progress.report({

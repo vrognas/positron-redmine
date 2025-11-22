@@ -29,7 +29,7 @@ export default async ({ server }: ActionProperties) => {
 
   vscode.window.withProgress(
     {
-      location: vscode.ProgressLocation.Window,
+      location: vscode.ProgressLocation.Notification,
     },
     (progress) => {
       progress.report({

@@ -30,7 +30,7 @@ export default async ({ server }: ActionProperties, issueId?: string) => {
 
   await vscode.window.withProgress(
     {
-      location: vscode.ProgressLocation.Window,
+      location: vscode.ProgressLocation.Notification,
     },
     (progress) => {
       progress.report({
