@@ -27,7 +27,7 @@
     "onView:redmine-explorer-my-issues",
     "onView:redmine-explorer-projects"
   ],
-  "main": "./out/extension",
+  "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
@@ -175,8 +175,8 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "node esbuild.js --production",
-    "watch": "node esbuild.js --watch",
+    "compile": "node esbuild.cjs --production",
+    "watch": "node esbuild.cjs --watch",
     "lint": "eslint .",
     "package": "npx @vscode/vsce package",
     "test": "vitest run",
