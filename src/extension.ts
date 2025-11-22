@@ -157,7 +157,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const registerCommand = (
     name: string,
-    action: (props: ActionProperties, ...args: unknown[]) => void
+    action: (props: ActionProperties, ...args: any[]) => void | Promise<void>
   ) => {
     context.subscriptions.push(
       vscode.commands.registerCommand(

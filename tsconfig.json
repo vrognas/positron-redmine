@@ -12,5 +12,5 @@
     "rootDir": "src",
     "sourceMap": true
   },
-  "exclude": ["node_modules", ".vscode-test"]
+  "exclude": ["node_modules", ".vscode-test", "test", "*.config.ts", "*.cjs"]
 }

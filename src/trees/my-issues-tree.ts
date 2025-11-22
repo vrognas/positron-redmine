@@ -17,8 +17,8 @@ export class MyIssuesTree implements vscode.TreeDataProvider<Issue> {
     });
   }
 
-  onDidChangeTreeData$ = new vscode.EventEmitter<Issue>();
-  onDidChangeTreeData: vscode.Event<Issue> = this.onDidChangeTreeData$.event;
+  onDidChangeTreeData$ = new vscode.EventEmitter<void>();
+  onDidChangeTreeData: vscode.Event<void> = this.onDidChangeTreeData$.event;
   getTreeItem(issue: Issue): vscode.TreeItem | Thenable<vscode.TreeItem> {
     const item = new vscode.TreeItem(
       `#${issue.id} [${issue.tracker.name}] (${issue.status.name}) ${issue.subject} by ${issue.author.name}`,

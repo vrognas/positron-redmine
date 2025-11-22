@@ -27,8 +27,8 @@ export class ProjectsTree
     this.viewStyle = ProjectsViewStyle.LIST;
   }
 
-  onDidChangeTreeData$ = new vscode.EventEmitter<RedmineProject | Issue>();
-  onDidChangeTreeData: vscode.Event<RedmineProject | Issue> = this
+  onDidChangeTreeData$ = new vscode.EventEmitter<void>();
+  onDidChangeTreeData: vscode.Event<void> = this
     .onDidChangeTreeData$.event;
   getTreeItem(
     projectOrIssue: RedmineProject | Issue

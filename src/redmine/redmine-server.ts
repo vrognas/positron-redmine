@@ -108,9 +108,10 @@ export class RedmineServer {
       path: `${url.pathname}${path}`,
       method,
     };
-    if (data && options.headers) {
-      options.headers["Content-Length"] = data.length;
-      options.headers["Content-Type"] = "application/json";
+    if (data) {
+      const headers = options.headers as http.OutgoingHttpHeaders;
+      headers["Content-Length"] = data.length;
+      headers["Content-Type"] = "application/json";
     }
 
     return new Promise((resolve, reject) => {
