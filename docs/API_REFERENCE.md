@@ -3,6 +3,7 @@
 Comprehensive reference for Redmine REST API, VS Code Extension API, and Positron IDE APIs used in this extension.
 
 ## Table of Contents
+
 1. [Redmine REST API](#redmine-rest-api)
 2. [VS Code Extension API](#vs-code-extension-api)
 3. [Positron IDE API](#positron-ide-api)
@@ -12,6 +13,7 @@ Comprehensive reference for Redmine REST API, VS Code Extension API, and Positro
 ## Redmine REST API
 
 ### Overview
+
 Redmine provides a REST API for programmatic access. Authentication via `X-Redmine-API-Key` header.
 
 **Base URL Pattern**: `{server}/path.json`
@@ -22,6 +24,7 @@ Redmine provides a REST API for programmatic access. Authentication via `X-Redmi
 #### Projects
 
 **GET /projects.json**
+
 ```typescript
 // Fetch all projects (paginated)
 GET /projects.json?limit={limit}&offset={offset}
@@ -51,6 +54,7 @@ Project: {
 #### Issues
 
 **GET /issues.json**
+
 ```typescript
 // Open issues assigned to current user
 GET /issues.json?status_id=open&assigned_to_id=me
@@ -90,22 +94,25 @@ Issue: {
 ```
 
 **Implementations**:
+
 - `RedmineServer.getIssuesAssignedToMe()` - user's open issues
 - `RedmineServer.getOpenIssuesForProject(id, includeSubprojects)` - project issues
 
 **GET /issues/{id}.json**
+
 ```typescript
 // Single issue by ID
-GET /issues/{id}.json
+GET / issues / { id }.json;
 
 Response: {
-  issue: Issue
+  issue: Issue;
 }
 ```
 
 **Implementation**: `RedmineServer.getIssueById(issueId)`
 
 **PUT /issues/{id}.json**
+
 ```typescript
 // Update issue
 PUT /issues/{id}.json
@@ -122,12 +129,14 @@ Response: 200 OK (empty body) or error
 ```
 
 **Implementations**:
+
 - `RedmineServer.setIssueStatus(issue, statusId)` - change status only
 - `RedmineServer.applyQuickUpdate(quickUpdate)` - batch update status + assignee + notes
 
 #### Issue Statuses
 
 **GET /issue_statuses.json**
+
 ```typescript
 GET /issue_statuses.json
 
@@ -148,6 +157,7 @@ IssueStatus: {
 #### Time Entries
 
 **POST /time_entries.json**
+
 ```typescript
 // Add time entry to issue
 POST /time_entries.json
@@ -181,6 +191,7 @@ TimeEntry: {
 **Implementation**: `RedmineServer.addTimeEntry(issueId, activityId, hours, message)`
 
 **GET /enumerations/time_entry_activities.json**
+
 ```typescript
 // Available time entry activity types
 GET /enumerations/time_entry_activities.json
@@ -202,6 +213,7 @@ TimeEntryActivity: {
 #### Memberships
 
 **GET /projects/{id}/memberships.json**
+
 ```typescript
 // Users and groups with access to project
 GET /projects/{id}/memberships.json
@@ -234,6 +246,7 @@ Role: {
 #### Issues (Extended)
 
 **POST /issues.json**
+
 ```typescript
 // Create new issue programmatically
 POST /issues.json
@@ -255,12 +268,14 @@ Body: {
 **Opportunity**: Implement in-editor issue creation with VS Code UI.
 
 **DELETE /issues/{id}.json**
+
 ```typescript
 // Delete issue (if permitted)
-DELETE /issues/{id}.json
+DELETE / issues / { id }.json;
 ```
 
 **GET /issues.json (advanced queries)**
+
 ```typescript
 // Filter by multiple criteria
 GET /issues.json?{params}
@@ -281,6 +296,7 @@ Query params:
 #### Comments/Notes
 
 **GET /issues/{id}.json?include=journals**
+
 ```typescript
 // Get issue with comment history
 GET /issues/{id}.json?include=journals
@@ -305,6 +321,7 @@ Journal: {
 #### Attachments
 
 **POST /uploads.json**
+
 ```typescript
 // Upload file for attachment
 POST /uploads.json
@@ -319,17 +336,20 @@ Response: {
 ```
 
 **POST /issues/{id}.json (with attachment)**
+
 ```typescript
 // Attach uploaded file to issue
-PUT /issues/{id}.json
+PUT / issues / { id }.json;
 Body: {
   issue: {
-    uploads: [{
-      token: string,      // From upload response
-      filename: string,
-      description?: string,
-      content_type?: string
-    }]
+    uploads: [
+      {
+        token: string, // From upload response
+        filename: string,
+        description: string,
+        content_type: string,
+      },
+    ];
   }
 }
 ```
@@ -339,16 +359,20 @@ Body: {
 #### Watchers
 
 **POST /issues/{id}/watchers.json**
+
 ```typescript
 // Add watcher to issue
-POST /issues/{id}/watchers.json
-Body: { user_id: number }
+POST / issues / { id } / watchers.json;
+Body: {
+  user_id: number;
+}
 ```
 
 **DELETE /issues/{id}/watchers/{user_id}.json**
+
 ```typescript
 // Remove watcher
-DELETE /issues/{id}/watchers/{user_id}.json
+DELETE / issues / { id } / watchers / { user_id }.json;
 ```
 
 **Opportunity**: Watch/unwatch issues.
@@ -356,6 +380,7 @@ DELETE /issues/{id}/watchers/{user_id}.json
 #### Custom Fields
 
 **GET /custom_fields.json**
+
 ```typescript
 // Available custom fields
 GET /custom_fields.json
@@ -379,6 +404,7 @@ CustomField: {
 #### Trackers
 
 **GET /trackers.json**
+
 ```typescript
 // Available issue types (Bug, Feature, etc.)
 GET /trackers.json
@@ -399,6 +425,7 @@ Tracker: {
 #### Priorities
 
 **GET /enumerations/issue_priorities.json**
+
 ```typescript
 // Issue priorities (Low, Normal, High, etc.)
 GET /enumerations/issue_priorities.json
@@ -419,6 +446,7 @@ Priority: {
 #### Versions (Releases)
 
 **GET /projects/{id}/versions.json**
+
 ```typescript
 // Project versions/releases
 GET /projects/{id}/versions.json
@@ -444,6 +472,7 @@ Version: {
 #### News
 
 **GET /news.json**
+
 ```typescript
 // Project news/announcements
 GET /news.json?project_id={id}
@@ -458,6 +487,7 @@ Response: {
 #### Wiki
 
 **GET /projects/{id}/wiki/index.json**
+
 ```typescript
 // Wiki page list
 GET /projects/{id}/wiki/index.json
@@ -468,6 +498,7 @@ Response: {
 ```
 
 **GET /projects/{id}/wiki/{title}.json**
+
 ```typescript
 // Single wiki page content
 GET /projects/{id}/wiki/{title}.json
@@ -489,6 +520,7 @@ Response: {
 #### Users
 
 **GET /users/current.json**
+
 ```typescript
 // Current user info
 GET /users/current.json
@@ -517,6 +549,7 @@ Response: {
 #### Extension Lifecycle
 
 **`vscode.ExtensionContext`**
+
 ```typescript
 interface ExtensionContext {
   subscriptions: Disposable[],  // Auto-cleanup on deactivate
@@ -540,6 +573,7 @@ export function activate(context: vscode.ExtensionContext): void {
 #### Commands
 
 **`vscode.commands.registerCommand()`**
+
 ```typescript
 vscode.commands.registerCommand(
   command: string,
@@ -553,6 +587,7 @@ context.subscriptions.push(
 ```
 
 **Current Commands Registered**:
+
 - `redmine.listOpenIssuesAssignedToMe`
 - `redmine.openActionsForIssue`
 - `redmine.openActionsForIssueUnderCursor`
@@ -565,6 +600,7 @@ context.subscriptions.push(
 **Locations**: `src/extension.ts:154-189`
 
 **`vscode.commands.executeCommand()`**
+
 ```typescript
 vscode.commands.executeCommand(
   command: string,
@@ -577,12 +613,14 @@ vscode.commands.executeCommand("vscode.open", uri)
 ```
 
 **Current Usage**:
+
 - Setting context variables (`src/extension.ts:29-39`)
 - Opening URLs (`src/commands/new-issue.ts:7-15`)
 
 #### Window (UI)
 
 **`vscode.window.createTreeView()`**
+
 ```typescript
 vscode.window.createTreeView<T>(
   viewId: string,
@@ -596,12 +634,14 @@ vscode.window.createTreeView("redmine-explorer-my-issues", {
 ```
 
 **Current Tree Views**:
+
 - `redmine-explorer-my-issues` → `MyIssuesTree`
 - `redmine-explorer-projects` → `ProjectsTree`
 
 **Locations**: `src/extension.ts:22-27`
 
 **`vscode.window.showQuickPick()`**
+
 ```typescript
 vscode.window.showQuickPick<T extends QuickPickItem>(
   items: T[],
@@ -623,6 +663,7 @@ vscode.window.showQuickPick(
 ```
 
 **Current Usage**:
+
 - Status selection (`src/controllers/issue-controller.ts:74`)
 - Activity type selection (`src/controllers/issue-controller.ts:16`)
 - Assignee selection (`src/controllers/issue-controller.ts:167`)
@@ -631,6 +672,7 @@ vscode.window.showQuickPick(
 - Issue selection (`src/commands/list-open-issues-assigned-to-me.ts:45`)
 
 **`vscode.window.showInputBox()`**
+
 ```typescript
 vscode.window.showInputBox(
   options?: InputBoxOptions
@@ -652,6 +694,7 @@ issueId = await vscode.window.showInputBox({
 ```
 
 **Current Usage**:
+
 - Issue ID input (`src/commands/open-actions-for-issue.ts:7`)
 - Time entry input (`src/controllers/issue-controller.ts:38`)
 - Quick update message (`src/controllers/issue-controller.ts:188`)
@@ -659,6 +702,7 @@ issueId = await vscode.window.showInputBox({
 **`vscode.window.showInformationMessage()`**
 **`vscode.window.showWarningMessage()`**
 **`vscode.window.showErrorMessage()`**
+
 ```typescript
 vscode.window.show{Type}Message(
   message: string,
@@ -672,6 +716,7 @@ vscode.window.showInformationMessage("Time entry added.");
 **Current Usage**: Success/error notifications throughout codebase.
 
 **`vscode.window.withProgress()`**
+
 ```typescript
 vscode.window.withProgress<R>(
   options: ProgressOptions,
@@ -696,11 +741,13 @@ await vscode.window.withProgress(
 
 **Current Usage**: API call loading indicators.
 **Locations**:
+
 - `src/commands/open-actions-for-issue.ts:31`
 - `src/commands/new-issue.ts:25`
 - `src/commands/list-open-issues-assigned-to-me.ts:30`
 
 **`vscode.window.showWorkspaceFolderPick()`**
+
 ```typescript
 vscode.window.showWorkspaceFolderPick(
   options?: WorkspaceFolderPickOptions
@@ -714,6 +761,7 @@ const pickedFolder = await vscode.window.showWorkspaceFolderPick();
 **Location**: `src/extension.ts:58`
 
 **`vscode.window.activeTextEditor`**
+
 ```typescript
 // Currently active text editor
 vscode.window.activeTextEditor: TextEditor | undefined
@@ -726,6 +774,7 @@ const editor = vscode.window.activeTextEditor;
 **Location**: `src/commands/open-actions-for-issue-under-cursor.ts:29`
 
 **`vscode.window.createWebviewPanel()`**
+
 ```typescript
 vscode.window.createWebviewPanel(
   viewType: string,
@@ -750,6 +799,7 @@ panel.webview.html = "<!DOCTYPE html>...";
 #### Workspace
 
 **`vscode.workspace.getConfiguration()`**
+
 ```typescript
 vscode.workspace.getConfiguration(
   section?: string,
@@ -764,12 +814,14 @@ const apiKey = config.apiKey;
 
 **Current Usage**: Read extension settings.
 **Locations**:
+
 - `src/extension.ts:66` (command configuration)
 - `src/extension.ts:94` (migration check)
 - `src/trees/my-issues-tree.ts:9` (tree initialization)
 - `src/trees/projects-tree.ts:19` (tree initialization)
 
 **`vscode.workspace.workspaceFolders`**
+
 ```typescript
 vscode.workspace.workspaceFolders: WorkspaceFolder[] | undefined
 
@@ -783,6 +835,7 @@ vscode.workspace.workspaceFolders: WorkspaceFolder[] | undefined
 #### Tree View
 
 **`vscode.TreeDataProvider<T>`**
+
 ```typescript
 interface TreeDataProvider<T> {
   onDidChangeTreeData?: Event<T | undefined | null>,
@@ -801,14 +854,17 @@ export class MyIssuesTree implements vscode.TreeDataProvider<Issue> {
 ```
 
 **Current Implementations**:
+
 - `MyIssuesTree` → displays `Issue[]`
 - `ProjectsTree` → displays `RedmineProject | Issue` (polymorphic)
 
 **Locations**:
+
 - `src/trees/my-issues-tree.ts:6-43`
 - `src/trees/projects-tree.ts:13-97`
 
 **`vscode.TreeItem`**
+
 ```typescript
 class TreeItem {
   label: string,
@@ -835,6 +891,7 @@ item.command = {
 **Current Usage**: Tree item rendering with click handlers.
 
 **`vscode.EventEmitter<T>`**
+
 ```typescript
 class EventEmitter<T> {
   event: Event<T>,
@@ -855,6 +912,7 @@ this.onDidChangeTreeData$.fire();
 #### URIs
 
 **`vscode.Uri.parse()`**
+
 ```typescript
 vscode.Uri.parse(value: string): Uri
 
@@ -867,10 +925,11 @@ vscode.Uri.parse(`${this.redmine.options.address}/issues/${this.issue.id}`)
 #### Text Editor
 
 **`vscode.TextEditor`**
+
 ```typescript
 interface TextEditor {
-  selection: Selection,
-  document: TextDocument,
+  selection: Selection;
+  document: TextDocument;
   // ...
 }
 
@@ -887,12 +946,10 @@ function getTextUnderCursor(editor: vscode.TextEditor): string {
 **Location**: `src/commands/open-actions-for-issue-under-cursor.ts`
 
 **`vscode.Selection`**
+
 ```typescript
 class Selection extends Range {
-  constructor(
-    anchor: Position,
-    active: Position
-  )
+  constructor(anchor: Position, active: Position);
 }
 
 // Usage in open-actions-for-issue-under-cursor.ts:13-16
@@ -907,6 +964,7 @@ const newSelection = new vscode.Selection(
 ### Available But Unused APIs
 
 #### Status Bar
+
 ```typescript
 vscode.window.createStatusBarItem(
   alignment?: StatusBarAlignment,
@@ -920,6 +978,7 @@ statusBarItem.show();
 **Opportunity**: Show active server, issue count, sync status.
 
 #### Notifications with Actions
+
 ```typescript
 vscode.window.showInformationMessage(
   "Issue created!",
@@ -933,6 +992,7 @@ vscode.window.showInformationMessage(
 **Opportunity**: Action buttons on notifications.
 
 #### Output Channel
+
 ```typescript
 const outputChannel = vscode.window.createOutputChannel("Redmine");
 outputChannel.appendLine("API request sent...");
@@ -942,6 +1002,7 @@ outputChannel.show();
 **Opportunity**: Debug logging, API request tracing.
 
 #### Tasks
+
 ```typescript
 const task = new vscode.Task(
   { type: "redmine" },
@@ -955,9 +1016,10 @@ vscode.tasks.executeTask(task);
 **Opportunity**: Background sync tasks.
 
 #### Decorations
+
 ```typescript
 const decorationType = vscode.window.createTextEditorDecorationType({
-  backgroundColor: "rgba(255, 0, 0, 0.3)"
+  backgroundColor: "rgba(255, 0, 0, 0.3)",
 });
 editor.setDecorations(decorationType, [rangeArray]);
 ```
@@ -965,6 +1027,7 @@ editor.setDecorations(decorationType, [rangeArray]);
 **Opportunity**: Highlight issue references in code.
 
 #### Hover Provider
+
 ```typescript
 vscode.languages.registerHoverProvider("*", {
   provideHover(document, position) {
@@ -974,13 +1037,14 @@ vscode.languages.registerHoverProvider("*", {
       // Fetch and display issue preview
       return new vscode.Hover(`**Issue #${issueId}**: ${preview}`);
     }
-  }
+  },
 });
 ```
 
 **Opportunity**: Hover over `#123` to see issue preview.
 
 #### Code Actions
+
 ```typescript
 vscode.languages.registerCodeActionsProvider("*", {
   provideCodeActions(document, range) {
@@ -989,16 +1053,17 @@ vscode.languages.registerCodeActionsProvider("*", {
       {
         title: "Open Redmine Issue",
         command: "redmine.openActionsForIssue",
-        arguments: [issueId]
-      }
+        arguments: [issueId],
+      },
     ];
-  }
+  },
 });
 ```
 
 **Opportunity**: Quick actions on issue references (💡 lightbulb).
 
 #### Webview API (Advanced)
+
 ```typescript
 // Two-way communication
 panel.webview.onDidReceiveMessage(message => {
@@ -1011,9 +1076,10 @@ panel.webview.postMessage({ type: "update", data: ... });
 **Opportunity**: Rich issue editor, Gantt charts, reports.
 
 #### File System Watcher
+
 ```typescript
 const watcher = vscode.workspace.createFileSystemWatcher("**/*.{md,txt}");
-watcher.onDidChange(uri => {
+watcher.onDidChange((uri) => {
   // Update issue references when files change
 });
 ```
@@ -1021,6 +1087,7 @@ watcher.onDidChange(uri => {
 **Opportunity**: Track issue references in workspace.
 
 #### Terminal
+
 ```typescript
 const terminal = vscode.window.createTerminal("Redmine CLI");
 terminal.sendText("redmine-cli list-issues");
@@ -1030,6 +1097,7 @@ terminal.show();
 **Opportunity**: CLI integration.
 
 #### Source Control
+
 ```typescript
 vscode.scm.createSourceControlResourceGroup(...);
 ```
@@ -1049,6 +1117,7 @@ Positron is a data science IDE based on VS Code, built by Posit (formerly RStudi
 **Key Difference**: Positron adds data-science-specific APIs while maintaining full VS Code API compatibility.
 
 ### Engine Requirements
+
 ```json
 "engines": {
   "vscode": "^1.74.0",
@@ -1063,18 +1132,20 @@ Positron is a data science IDE based on VS Code, built by Posit (formerly RStudi
 Positron extends VS Code with additional APIs under the `positron` namespace. Current extension doesn't use these yet.
 
 #### Data Explorer
+
 ```typescript
 // Hypothetical Positron API (not currently used)
 positron.dataExplorer.register({
   getDataFrame: async () => {
     // Convert Redmine data to DataFrame
-  }
+  },
 });
 ```
 
 **Opportunity**: Export issue lists, time entries to data frames for analysis.
 
 #### Notebook Integration
+
 ```typescript
 // Register issue data as notebook variable
 positron.runtime.execute(`
@@ -1086,6 +1157,7 @@ positron.runtime.execute(`
 **Opportunity**: Load Redmine data into R/Python notebooks.
 
 #### Connections Pane
+
 ```typescript
 positron.connections.register({
   name: "Redmine Server",
@@ -1101,6 +1173,7 @@ positron.connections.register({
 **Current Approach**: Extension uses only standard VS Code APIs, ensuring compatibility with both platforms.
 
 **Detection Pattern** (if needed):
+
 ```typescript
 const isPositron = vscode.env.appName.includes("Positron");
 
@@ -1119,41 +1192,41 @@ if (isPositron) {
 
 ### Redmine API Coverage
 
-| Category | Used | Available | Coverage |
-|----------|------|-----------|----------|
-| Issues | 4/10 | 10 | 40% |
-| Projects | 1/3 | 3 | 33% |
-| Time Entries | 2/3 | 3 | 66% |
-| Users | 0/5 | 5 | 0% |
-| Wiki | 0/4 | 4 | 0% |
-| Attachments | 0/2 | 2 | 0% |
-| Custom Fields | 0/2 | 2 | 0% |
+| Category      | Used | Available | Coverage |
+| ------------- | ---- | --------- | -------- |
+| Issues        | 4/10 | 10        | 40%      |
+| Projects      | 1/3  | 3         | 33%      |
+| Time Entries  | 2/3  | 3         | 66%      |
+| Users         | 0/5  | 5         | 0%       |
+| Wiki          | 0/4  | 4         | 0%       |
+| Attachments   | 0/2  | 2         | 0%       |
+| Custom Fields | 0/2  | 2         | 0%       |
 
 **Total**: 7/29 endpoints (24%)
 
 ### VS Code API Coverage
 
-| Category | Used | Key Gaps |
-|----------|------|----------|
-| Commands | ✅ Full | - |
-| Configuration | ✅ Full | - |
-| Tree Views | ✅ Full | - |
-| Quick Pick | ✅ Full | - |
-| Progress | ✅ Basic | Cancellation tokens |
-| Notifications | ✅ Basic | Action buttons |
-| Text Editors | ✅ Basic | Decorations, hover |
-| Webviews | ⚠️ Limited | Two-way communication |
-| Status Bar | ❌ None | Status items |
-| Output Channel | ❌ None | Debug logging |
-| Language Features | ❌ None | Hover, code actions |
+| Category          | Used       | Key Gaps              |
+| ----------------- | ---------- | --------------------- |
+| Commands          | ✅ Full    | -                     |
+| Configuration     | ✅ Full    | -                     |
+| Tree Views        | ✅ Full    | -                     |
+| Quick Pick        | ✅ Full    | -                     |
+| Progress          | ✅ Basic   | Cancellation tokens   |
+| Notifications     | ✅ Basic   | Action buttons        |
+| Text Editors      | ✅ Basic   | Decorations, hover    |
+| Webviews          | ⚠️ Limited | Two-way communication |
+| Status Bar        | ❌ None    | Status items          |
+| Output Channel    | ❌ None    | Debug logging         |
+| Language Features | ❌ None    | Hover, code actions   |
 
 ### Positron API Coverage
 
-| Category | Used | Opportunity |
-|----------|------|-------------|
+| Category      | Used    | Opportunity            |
+| ------------- | ------- | ---------------------- |
 | Data Explorer | ❌ None | Issue/time data export |
-| Connections | ❌ None | Server management |
-| Runtime | ❌ None | Notebook integration |
+| Connections   | ❌ None | Server management      |
+| Runtime       | ❌ None | Notebook integration   |
 
 **Note**: Extension prioritizes VS Code compatibility.
 
@@ -1162,6 +1235,7 @@ if (isPositron) {
 ## Best Practices
 
 ### API Key Security
+
 ```typescript
 // ✅ Good: Use VS Code secure storage
 await context.secrets.store("redmine.apiKey", apiKey);
@@ -1171,6 +1245,7 @@ config.get("redmine.apiKey");
 ```
 
 ### Error Handling
+
 ```typescript
 // ✅ Good: Specific error messages
 catch (error) {
@@ -1183,20 +1258,25 @@ catch (error) {
 ```
 
 ### Progress Reporting
+
 ```typescript
 // ✅ Good: Cancellable progress
-await vscode.window.withProgress({
-  location: vscode.ProgressLocation.Notification,
-  cancellable: true
-}, async (progress, token) => {
-  token.onCancellationRequested(() => abort());
-  progress.report({ increment: 50, message: "Fetching issues..." });
-});
+await vscode.window.withProgress(
+  {
+    location: vscode.ProgressLocation.Notification,
+    cancellable: true,
+  },
+  async (progress, token) => {
+    token.onCancellationRequested(() => abort());
+    progress.report({ increment: 50, message: "Fetching issues..." });
+  }
+);
 
 // ⚠️ Current: Non-cancellable window progress
 ```
 
 ### Caching Strategy
+
 ```typescript
 // ✅ Current: Static data cached (statuses, activities)
 if (this.issueStatuses) return Promise.resolve(this.issueStatuses);
@@ -1211,20 +1291,21 @@ if (this.projects && Date.now() - this.projectsFetchedAt < 5 * 60 * 1000) {
 
 ## Extension Opportunities Matrix
 
-| Feature | Redmine API | VS Code API | Complexity | Impact |
-|---------|-------------|-------------|------------|--------|
-| Issue creation in-editor | POST /issues.json | showInputBox, showQuickPick | Medium | High |
-| Issue comments | GET/POST journals | Webview or tree children | Medium | Medium |
-| File attachments | POST /uploads.json | workspace.fs, showOpenDialog | High | Medium |
-| Issue reference hover | GET /issues/{id}.json | registerHoverProvider | Low | High |
-| Advanced search | GET /issues.json?{filters} | New tree view | Medium | Medium |
-| Custom fields | GET /custom_fields.json | Dynamic UI generation | High | Low |
-| Wiki viewer | GET /wiki/*.json | Webview + markdown | Medium | Low |
-| Status bar indicator | - | createStatusBarItem | Low | Low |
-| Debug logging | - | createOutputChannel | Low | Medium |
-| Data export (Positron) | GET /time_entries.json | positron.dataExplorer | High | Medium |
+| Feature                  | Redmine API                | VS Code API                  | Complexity | Impact |
+| ------------------------ | -------------------------- | ---------------------------- | ---------- | ------ |
+| Issue creation in-editor | POST /issues.json          | showInputBox, showQuickPick  | Medium     | High   |
+| Issue comments           | GET/POST journals          | Webview or tree children     | Medium     | Medium |
+| File attachments         | POST /uploads.json         | workspace.fs, showOpenDialog | High       | Medium |
+| Issue reference hover    | GET /issues/{id}.json      | registerHoverProvider        | Low        | High   |
+| Advanced search          | GET /issues.json?{filters} | New tree view                | Medium     | Medium |
+| Custom fields            | GET /custom_fields.json    | Dynamic UI generation        | High       | Low    |
+| Wiki viewer              | GET /wiki/\*.json          | Webview + markdown           | Medium     | Low    |
+| Status bar indicator     | -                          | createStatusBarItem          | Low        | Low    |
+| Debug logging            | -                          | createOutputChannel          | Low        | Medium |
+| Data export (Positron)   | GET /time_entries.json     | positron.dataExplorer        | High       | Medium |
 
 **Legend**:
+
 - **Complexity**: Low (< 1 day), Medium (1-3 days), High (> 3 days)
 - **Impact**: Low (nice-to-have), Medium (useful), High (game-changer)
 
@@ -1233,21 +1314,25 @@ if (this.projects && Date.now() - this.projectsFetchedAt < 5 * 60 * 1000) {
 ## Migration Path
 
 ### Phase 1: Quick Wins
+
 1. Status bar item (server status, issue count)
 2. Output channel (debug logging)
 3. Notification action buttons
 
 ### Phase 2: Enhanced UX
+
 1. Issue reference hover provider
 2. In-editor issue creation
 3. Advanced issue search/filters
 
 ### Phase 3: Advanced Features
+
 1. Comment viewing/posting
 2. File attachments
 3. Custom field support
 
 ### Phase 4: Positron Integration
+
 1. Data frame export (issues, time entries)
 2. Connections pane integration
 3. Notebook variable injection

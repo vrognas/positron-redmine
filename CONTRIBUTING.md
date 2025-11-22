@@ -10,15 +10,15 @@ Please, make sure new features and support questions related to the extension ar
 
 # Ground Rules
 
-* If you come up with a new feature, discuss it first in the [Discussions](https://github.com/rozpuszczalny/vscode-redmine/discussions) tab on GitHub with the maintainers and community
-* Ensure your code is formatted with [Prettier](https://prettier.io) and checked with [eslint](https://eslint.org) (you may check both by simply running `npm run lint`)
-* Keep PRs as small possible - do not batch multiple features within a single PR
-* Try to keep PR with a single commit - otherwise maintainers may squash it into single commit
-* Name your commits using [Conventional commits](https://www.conventionalcommits.org/en/v1.0.0/)
+- If you come up with a new feature, discuss it first in the [Discussions](https://github.com/rozpuszczalny/vscode-redmine/discussions) tab on GitHub with the maintainers and community
+- Ensure your code is formatted with [Prettier](https://prettier.io) and checked with [eslint](https://eslint.org) (you may check both by simply running `npm run lint`)
+- Keep PRs as small possible - do not batch multiple features within a single PR
+- Try to keep PR with a single commit - otherwise maintainers may squash it into single commit
+- Name your commits using [Conventional commits](https://www.conventionalcommits.org/en/v1.0.0/)
 
   Supported types: `fix`, `feat`, `build`, `docs`, `style`, `refactor`, `perf`, `test`, `ci`
 
-* Be welcoming to newcomers and encourage diverse new contributors from all backgrounds. See the [Code of Conduct](./CODE_OF_CONDUCT.md).
+- Be welcoming to newcomers and encourage diverse new contributors from all backgrounds. See the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 # Your First Contribution
 
@@ -26,15 +26,15 @@ Unsure where to begin contributing to `vscode-redmine`? You can start by looking
 
 > Working on your first Pull Request? You can learn more about how to do it on this site [https://www.firsttimersonly.com/](https://www.firsttimersonly.com/)
 
-
 # Getting started
 
 1. Create your own fork of the code
 2. Do the changes in your fork
 3. If you like the change and think the project could use it:
-  * Be sure you have followed the code style for the project.
-  * Add entry to the [CHANGELOG.md](./CHANGELOG.md) under `[Unreleased]` section, following [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) convention.
-  * Send a pull request!
+
+- Be sure you have followed the code style for the project.
+- Add entry to the [CHANGELOG.md](./CHANGELOG.md) under `[Unreleased]` section, following [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) convention.
+- Send a pull request!
 
 # How to report a bug
 
