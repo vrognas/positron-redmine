@@ -184,7 +184,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@types/lodash": "^4.14.175",
     "@types/mocha": "^2.2.42",
     "@types/node": "^7.0.43",
     "@types/vscode": "^1.31.0",
@@ -199,8 +198,5 @@
     "prettier": "^2.0.5",
     "typescript": "^3.9.7",
     "vitest": "^2.1.9"
-  },
-  "dependencies": {
-    "lodash": "^4.17.21"
   }
 }

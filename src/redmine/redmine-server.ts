@@ -14,8 +14,6 @@ import { TimeEntry } from "./models/time-entry";
 import { Issue } from "./models/issue";
 import { IssueStatus as RedmineIssueStatus } from "./models/issue-status";
 import { Membership as RedmineMembership } from "./models/membership";
-import isNil from "lodash/isNil";
-import isEqual from "lodash/isEqual";
 
 type HttpMethods = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
@@ -82,7 +80,7 @@ export class RedmineServer {
       ...options,
       url: parse(options.address),
     };
-    if (isNil(this.options.additionalHeaders)) {
+    if (this.options.additionalHeaders == null) {
       this.options.additionalHeaders = {};
     }
   }
@@ -284,7 +282,7 @@ export class RedmineServer {
    * Returns promise, that resolves to list of issue statuses in provided redmine server
    */
   getIssueStatuses(): Promise<{ issue_statuses: RedmineIssueStatus[] }> {
-    if (isNil(this.issueStatuses)) {
+    if (this.issueStatuses == null) {
       return this.doRequest<{ issue_statuses: RedmineIssueStatus[] }>(
         "/issue_statuses.json",
         "GET"
@@ -378,7 +376,7 @@ export class RedmineServer {
       this.options.address === other.options.address &&
       this.options.key === other.options.key &&
       this.options.rejectUnauthorized === other.options.rejectUnauthorized &&
-      isEqual(this.options.additionalHeaders, other.options.additionalHeaders)
+      JSON.stringify(this.options.additionalHeaders) === JSON.stringify(other.options.additionalHeaders)
     );
   }
 }
