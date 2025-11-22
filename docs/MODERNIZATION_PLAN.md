@@ -15,6 +15,7 @@
 **How**: 5 phased TDD approach with MSW testing
 
 **Current State**:
+
 - 22 TypeScript files, 1,135 LOC
 - TypeScript 3.9.7 (2020) - 5 years outdated
 - No tests
@@ -22,6 +23,7 @@
 - 9 security vulnerabilities
 
 **Target State**:
+
 - TypeScript 5.7, ESM modules
 - API keys in VS Code Secrets (machine-local, encrypted)
 - 60%+ test coverage with MSW
@@ -33,6 +35,7 @@
 ## Design Principles
 
 **Avoided Overengineering**:
+
 - ❌ Repository pattern - overkill for 1,135 LOC
 - ❌ Mock repositories - use MSW instead
 - ❌ ServiceContainer/DI - unnecessary
@@ -40,6 +43,7 @@
 - ❌ Trivial language tests - focus on behavior
 
 **Simplified**:
+
 - 5 phases instead of 7
 - Direct implementation over abstraction layers
 - MSW for all HTTP testing
@@ -51,15 +55,15 @@
 
 ## Phase Overview
 
-| Phase | Duration | Focus | TDD |
-|-------|----------|-------|-----|
-| 0 | 2 days | Foundation fixes | ✓ |
-| 1 | 3 days | TypeScript 5.7 | ✓ |
-| 2 | 3 days | ESM migration | ✓ |
-| 3 | 4 days | Secrets API + VS Code modernization | ✓ |
-| 4 | 3 days | Testing with MSW | ✓ |
-| 5 | 1 day | Documentation & release | - |
-| **Total** | **16 days** | **~3 weeks** | |
+| Phase     | Duration    | Focus                               | TDD |
+| --------- | ----------- | ----------------------------------- | --- |
+| 0         | 2 days      | Foundation fixes                    | ✓   |
+| 1         | 3 days      | TypeScript 5.7                      | ✓   |
+| 2         | 3 days      | ESM migration                       | ✓   |
+| 3         | 4 days      | Secrets API + VS Code modernization | ✓   |
+| 4         | 3 days      | Testing with MSW                    | ✓   |
+| 5         | 1 day       | Documentation & release             | -   |
+| **Total** | **16 days** | **~3 weeks**                        |     |
 
 ---
 
@@ -68,29 +72,36 @@
 ### Step 0.1: Fix esbuild.js Null Access Bug
 
 **Test First**:
+
 ```typescript
 // test/unit/build/esbuild-error-handling.test.ts
-describe('esbuild error handling', () => {
-  it('should handle error with location', () => {
-    const error = { text: 'Error', location: { file: 'a.ts', line: 1, column: 5 } };
-    expect(formatError(error)).toBe('a.ts:1:5: Error');
+describe("esbuild error handling", () => {
+  it("should handle error with location", () => {
+    const error = {
+      text: "Error",
+      location: { file: "a.ts", line: 1, column: 5 },
+    };
+    expect(formatError(error)).toBe("a.ts:1:5: Error");
   });
 
-  it('should handle error without location', () => {
-    const error = { text: 'Error', location: null };
-    expect(formatError(error)).toBe('Error');
+  it("should handle error without location", () => {
+    const error = { text: "Error", location: null };
+    expect(formatError(error)).toBe("Error");
   });
 });
 ```
 
 **Then Fix**:
+
 ```javascript
 // esbuild.js:40-45
 build.onEnd((result) => {
   result.errors.forEach(({ text, location }) => {
     console.error(`✘ [ERROR] ${text}`);
     if (location) {
-      console.error(`    ${location.file}:${location.line}:${location.column}:`);
+      console.error(
+        `    ${location.file}:${location.line}:${location.column}:`
+      );
     }
   });
 });
@@ -101,27 +112,29 @@ build.onEnd((result) => {
 ### Step 0.2: Setup Vitest
 
 **Install dependencies**:
+
 ```bash
 npm install -D vitest@^2.1.0 @vitest/coverage-v8@^2.1.0 msw@^2.6.0
 ```
 
 **Create vitest.config.ts**:
+
 ```typescript
-import { defineConfig } from 'vitest/config';
-import { resolve } from 'node:path';
+import { defineConfig } from "vitest/config";
+import { resolve } from "node:path";
 
 export default defineConfig({
   test: {
-    environment: 'node',
+    environment: "node",
     alias: {
-      vscode: resolve(__dirname, './test/mocks/vscode.ts'),
+      vscode: resolve(__dirname, "./test/mocks/vscode.ts"),
     },
-    include: ['test/**/*.test.ts'],
+    include: ["test/**/*.test.ts"],
     coverage: {
-      provider: 'v8',
-      include: ['src/**/*.ts'],
+      provider: "v8",
+      include: ["src/**/*.ts"],
       thresholds: {
-        lines: 60,  // Realistic target
+        lines: 60, // Realistic target
         functions: 60,
         branches: 60,
         statements: 60,
@@ -133,8 +146,9 @@ export default defineConfig({
 ```
 
 **Create test/mocks/vscode.ts** (minimal mock):
+
 ```typescript
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
 export const window = {
   showQuickPick: vi.fn(),
@@ -171,6 +185,7 @@ export const ConfigurationTarget = { WorkspaceFolder: 3 };
 ```
 
 **Update package.json**:
+
 ```json
 {
   "scripts": {
@@ -186,11 +201,13 @@ export const ConfigurationTarget = { WorkspaceFolder: 3 };
 ### Step 0.3: Remove lodash
 
 **Test** (unnecessary - native JS):
+
 ```bash
 # Skip trivial tests, just replace
 ```
 
 **Replace**:
+
 ```typescript
 // src/trees/projects-tree.ts:60
 // BEFORE: if (!isNil(projectOrIssue) && ...)
@@ -209,6 +226,7 @@ JSON.stringify(this.options.additionalHeaders) === JSON.stringify(other.options.
 ```
 
 **Remove**:
+
 ```bash
 npm uninstall lodash @types/lodash
 ```
@@ -231,29 +249,30 @@ npm install -D \
 ### Step 1.2: Fix url.parse() → new URL()
 
 **Test First**:
+
 ```typescript
 // test/unit/redmine/url-handling.test.ts
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 
-describe('URL handling', () => {
-  it('should parse http URL', () => {
-    const url = new URL('http://example.com');
-    expect(url.protocol).toBe('http:');
-    expect(url.hostname).toBe('example.com');
+describe("URL handling", () => {
+  it("should parse http URL", () => {
+    const url = new URL("http://example.com");
+    expect(url.protocol).toBe("http:");
+    expect(url.hostname).toBe("example.com");
   });
 
-  it('should parse URL with port', () => {
-    const url = new URL('http://example.com:8080');
-    expect(url.port).toBe('8080');
+  it("should parse URL with port", () => {
+    const url = new URL("http://example.com:8080");
+    expect(url.port).toBe("8080");
   });
 
-  it('should parse URL with path', () => {
-    const url = new URL('https://example.com:8443/redmine');
-    expect(url.pathname).toBe('/redmine');
+  it("should parse URL with path", () => {
+    const url = new URL("https://example.com:8443/redmine");
+    expect(url.pathname).toBe("/redmine");
   });
 
-  it('should throw on invalid URL', () => {
-    expect(() => new URL('not-a-url')).toThrow();
+  it("should throw on invalid URL", () => {
+    expect(() => new URL("not-a-url")).toThrow();
   });
 });
 ```
@@ -261,18 +280,21 @@ describe('URL handling', () => {
 **Then Fix** (11 changes):
 
 1. **src/redmine/redmine-server.ts:1** - Remove import:
+
 ```typescript
 // DELETE: import { Url, parse } from "url";
 ```
 
 2. **src/redmine/redmine-server.ts:47** - Update type:
+
 ```typescript
 interface RedmineServerOptions {
-  url: URL;  // Was: Url
+  url: URL; // Was: Url
 }
 ```
 
 3. **src/redmine/redmine-server.ts:72-77** - Update validation:
+
 ```typescript
 let url: URL;
 try {
@@ -286,6 +308,7 @@ if (!["https:", "http:"].includes(url.protocol)) {
 ```
 
 4. **src/redmine/redmine-server.ts:83** - Update setOptions:
+
 ```typescript
 this.options = {
   ...options,
@@ -294,6 +317,7 @@ this.options = {
 ```
 
 5. **src/redmine/redmine-server.ts:98-105** - Fix port handling:
+
 ```typescript
 const options: https.RequestOptions = {
   hostname: url.hostname,
@@ -304,6 +328,7 @@ const options: https.RequestOptions = {
 ```
 
 6-10. **4 command files** - Update display:
+
 ```typescript
 // src/commands/{open-actions-for-issue,new-issue,commons/open-actions-for-issue-id,list-open-issues-assigned-to-me}.ts
 // CHANGE: server.options.url.host
@@ -317,12 +342,14 @@ const options: https.RequestOptions = {
 **Changes** (no trivial tests needed):
 
 1. **src/extension.ts:44-49** - any → unknown:
+
 ```typescript
 ...args: unknown[]
 ): Promise<{ props?: ActionProperties; args: unknown[] }>
 ```
 
 2. **src/extension.ts:146** - Remove non-null assertion:
+
 ```typescript
 if (props) {
   action(props, ...args);
@@ -330,16 +357,19 @@ if (props) {
 ```
 
 3. **src/utilities/error-to-string.ts:13** - Better typing:
+
 ```typescript
 (error as { message?: string })?.message ??
 ```
 
 4. **src/redmine/redmine-server.ts:55** - Initialize:
+
 ```typescript
 options: RedmineServerOptions = {} as RedmineServerOptions;
 ```
 
 5. **src/redmine/redmine-server.ts:109-110** - Type guard:
+
 ```typescript
 if (options.headers) {
   options.headers["Content-Length"] = data.length;
@@ -348,20 +378,23 @@ if (options.headers) {
 ```
 
 6. **src/redmine/redmine-server.ts:143** - statusCode check:
+
 ```typescript
 if (statusCode && statusCode >= 400) {
 ```
 
 7. **src/controllers/issue-controller.ts:55-56** - Input validation:
+
 ```typescript
 if (!input) {
-  vscode.window.showErrorMessage('Time entry input required');
+  vscode.window.showErrorMessage("Time entry input required");
   return;
 }
 const hours = input.substring(0, indexOf);
 ```
 
 8. **src/trees/projects-tree.ts:62** - Null check:
+
 ```typescript
 const subprojects = (this.projects ?? []).filter(...)
 ```
@@ -395,31 +428,33 @@ const subprojects = (this.projects ?? []).filter(...)
 ### Step 2.1: Update Build Configuration
 
 **tsconfig.json**:
+
 ```json
 {
   "compilerOptions": {
     "module": "ES2022",
-    "moduleResolution": "bundler",
+    "moduleResolution": "bundler"
     // ... rest unchanged
   }
 }
 ```
 
 **Rename esbuild.js → esbuild.cjs**:
+
 ```javascript
 // Keep CJS output for compatibility
-const esbuild = require('esbuild');
+const esbuild = require("esbuild");
 
 async function main() {
   const ctx = await esbuild.context({
-    entryPoints: ['src/extension.ts'],
+    entryPoints: ["src/extension.ts"],
     bundle: true,
-    format: 'cjs', // Keep CJS initially
+    format: "cjs", // Keep CJS initially
     minify: production,
     sourcemap: !production,
-    platform: 'node',
-    outfile: 'out/extension.js',
-    external: ['vscode'],
+    platform: "node",
+    outfile: "out/extension.js",
+    external: ["vscode"],
     plugins: [esbuildProblemMatcherPlugin],
   });
 
@@ -433,28 +468,31 @@ async function main() {
 
 // Fixed problem matcher (from Phase 0)
 const esbuildProblemMatcherPlugin = {
-  name: 'esbuild-problem-matcher',
+  name: "esbuild-problem-matcher",
   setup(build) {
-    build.onStart(() => console.log('[watch] build started'));
+    build.onStart(() => console.log("[watch] build started"));
     build.onEnd((result) => {
       result.errors.forEach(({ text, location }) => {
         console.error(`✘ [ERROR] ${text}`);
         if (location) {
-          console.error(`    ${location.file}:${location.line}:${location.column}:`);
+          console.error(
+            `    ${location.file}:${location.line}:${location.column}:`
+          );
         }
       });
-      console.log('[watch] build finished');
+      console.log("[watch] build finished");
     });
   },
 };
 
-main().catch(e => {
+main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
 ```
 
 **package.json**:
+
 ```json
 {
   "main": "./out/extension.js",
@@ -470,6 +508,7 @@ main().catch(e => {
 ### Step 2.2: Test Extension Activation
 
 **Manual test** (no automated test needed):
+
 1. Run `npm run compile`
 2. Press F5 in VS Code
 3. Verify extension activates
@@ -482,85 +521,87 @@ main().catch(e => {
 ### Step 3.1: Create SecretManager Utility
 
 **Test First**:
+
 ```typescript
 // test/unit/utilities/secret-manager.test.ts
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as vscode from 'vscode';
-import { RedmineSecretManager } from '../../../src/utilities/secret-manager';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as vscode from "vscode";
+import { RedmineSecretManager } from "../../../src/utilities/secret-manager";
 
-describe('RedmineSecretManager', () => {
+describe("RedmineSecretManager", () => {
   let context: vscode.ExtensionContext;
   let manager: RedmineSecretManager;
 
   beforeEach(() => {
-    context = {
+    context = ({
       secrets: {
         get: vi.fn(),
         store: vi.fn(),
         delete: vi.fn(),
         onDidChange: vi.fn(),
       },
-    } as unknown as vscode.ExtensionContext;
+    } as unknown) as vscode.ExtensionContext;
 
     manager = new RedmineSecretManager(context);
   });
 
-  it('should store API key', async () => {
-    const uri = vscode.Uri.parse('file:///home/user/project');
-    await manager.setApiKey(uri, 'test-key-123');
+  it("should store API key", async () => {
+    const uri = vscode.Uri.parse("file:///home/user/project");
+    await manager.setApiKey(uri, "test-key-123");
 
     expect(context.secrets.store).toHaveBeenCalledWith(
-      expect.stringContaining('redmine:'),
-      'test-key-123'
+      expect.stringContaining("redmine:"),
+      "test-key-123"
     );
   });
 
-  it('should retrieve API key', async () => {
-    const uri = vscode.Uri.parse('file:///home/user/project');
-    vi.mocked(context.secrets.get).mockResolvedValue('test-key-123');
+  it("should retrieve API key", async () => {
+    const uri = vscode.Uri.parse("file:///home/user/project");
+    vi.mocked(context.secrets.get).mockResolvedValue("test-key-123");
 
     const key = await manager.getApiKey(uri);
-    expect(key).toBe('test-key-123');
+    expect(key).toBe("test-key-123");
   });
 });
 ```
 
 **Then Implement**:
+
 ```typescript
 // src/utilities/secret-manager.ts
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
 export class RedmineSecretManager {
   constructor(private context: vscode.ExtensionContext) {}
 
   private buildKey(folderUri: vscode.Uri, field: string): string {
-    const encoded = Buffer.from(folderUri.toString()).toString('hex');
+    const encoded = Buffer.from(folderUri.toString()).toString("hex");
     return `redmine:${encoded}:${field}:v1`;
   }
 
   async getApiKey(folderUri: vscode.Uri): Promise<string | undefined> {
-    const key = this.buildKey(folderUri, 'apiKey');
+    const key = this.buildKey(folderUri, "apiKey");
     try {
       return await this.context.secrets.get(key);
     } catch (err) {
-      console.error('Failed to retrieve API key:', err);
+      console.error("Failed to retrieve API key:", err);
       return undefined;
     }
   }
 
   async setApiKey(folderUri: vscode.Uri, apiKey: string): Promise<void> {
-    const key = this.buildKey(folderUri, 'apiKey');
+    const key = this.buildKey(folderUri, "apiKey");
     await this.context.secrets.store(key, apiKey);
   }
 
   async deleteApiKey(folderUri: vscode.Uri): Promise<void> {
-    const key = this.buildKey(folderUri, 'apiKey');
+    const key = this.buildKey(folderUri, "apiKey");
     await this.context.secrets.delete(key);
   }
 
   onSecretChanged(callback: (key: string) => void): vscode.Disposable {
     return this.context.secrets.onDidChange((event) => {
-      if (event.key.startsWith('redmine:')) {
+      if (event.key.startsWith("redmine:")) {
         callback(event.key);
       }
     });
@@ -573,12 +614,13 @@ export class RedmineSecretManager {
 ### Step 3.2: Create Set API Key Command
 
 **Test**:
+
 ```typescript
 // test/unit/commands/set-api-key.test.ts
-describe('setApiKey command', () => {
-  it('should prompt for API key', async () => {
+describe("setApiKey command", () => {
+  it("should prompt for API key", async () => {
     // Mock showInputBox
-    vi.mocked(vscode.window.showInputBox).mockResolvedValue('test-key');
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue("test-key");
 
     await setApiKey(mockContext);
 
@@ -588,23 +630,27 @@ describe('setApiKey command', () => {
 ```
 
 **Implement**:
+
 ```typescript
 // src/commands/set-api-key.ts
-import * as vscode from 'vscode';
-import { RedmineSecretManager } from '../utilities/secret-manager';
+import * as vscode from "vscode";
+import { RedmineSecretManager } from "../utilities/secret-manager";
 
-export async function setApiKey(context: vscode.ExtensionContext): Promise<void> {
+export async function setApiKey(
+  context: vscode.ExtensionContext
+): Promise<void> {
   const secretManager = new RedmineSecretManager(context);
 
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
-    vscode.window.showErrorMessage('No workspace folder open');
+    vscode.window.showErrorMessage("No workspace folder open");
     return;
   }
 
-  const folder = folders.length === 1
-    ? folders[0]
-    : await vscode.window.showWorkspaceFolderPick();
+  const folder =
+    folders.length === 1
+      ? folders[0]
+      : await vscode.window.showWorkspaceFolderPick();
 
   if (!folder) return;
 
@@ -612,16 +658,18 @@ export async function setApiKey(context: vscode.ExtensionContext): Promise<void>
     prompt: `Enter Redmine API Key for ${folder.name}`,
     password: true,
     validateInput: (value) => {
-      if (!value) return 'API key cannot be empty';
-      if (value.length < 20) return 'API key appears invalid';
+      if (!value) return "API key cannot be empty";
+      if (value.length < 20) return "API key appears invalid";
       return null;
-    }
+    },
   });
 
   if (!apiKey) return;
 
   await secretManager.setApiKey(folder.uri, apiKey);
-  vscode.window.showInformationMessage(`API key for ${folder.name} stored securely`);
+  vscode.window.showInformationMessage(
+    `API key for ${folder.name} stored securely`
+  );
 }
 ```
 
@@ -631,7 +679,7 @@ export async function setApiKey(context: vscode.ExtensionContext): Promise<void>
 
 ```typescript
 // src/extension.ts
-import { RedmineSecretManager } from './utilities/secret-manager';
+import { RedmineSecretManager } from "./utilities/secret-manager";
 
 export function activate(context: vscode.ExtensionContext): void {
   const secretManager = new RedmineSecretManager(context);
@@ -646,7 +694,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Register set API key command
   context.subscriptions.push(
-    vscode.commands.registerCommand('redmine.setApiKey', () => setApiKey(context))
+    vscode.commands.registerCommand("redmine.setApiKey", () =>
+      setApiKey(context)
+    )
   );
 
   const parseConfiguration = async (
@@ -663,19 +713,26 @@ export function activate(context: vscode.ExtensionContext): void {
       return Promise.resolve({ props: undefined, args: [] });
     }
 
-    const config = vscode.workspace.getConfiguration("redmine", pickedFolder.uri);
+    const config = vscode.workspace.getConfiguration(
+      "redmine",
+      pickedFolder.uri
+    );
 
     // Try secrets first, fallback to config
     let apiKey = await secretManager.getApiKey(pickedFolder.uri);
 
     if (!apiKey) {
-      apiKey = config.get<string>('apiKey');
+      apiKey = config.get<string>("apiKey");
       if (apiKey) {
         // Auto-migrate on first use
         await secretManager.setApiKey(pickedFolder.uri, apiKey);
-        vscode.window.showInformationMessage('API key migrated to secure storage');
+        vscode.window.showInformationMessage(
+          "API key migrated to secure storage"
+        );
       } else {
-        vscode.window.showErrorMessage('No API key configured. Run "Redmine: Set API Key"');
+        vscode.window.showErrorMessage(
+          'No API key configured. Run "Redmine: Set API Key"'
+        );
         return Promise.resolve({ props: undefined, args: [] });
       }
     }
@@ -697,6 +754,7 @@ export function activate(context: vscode.ExtensionContext): void {
 ### Step 3.4: Remove Deprecated VS Code APIs
 
 **Remove activationEvents from package.json**:
+
 ```json
 {
   // DELETE ENTIRE SECTION
@@ -705,6 +763,7 @@ export function activate(context: vscode.ExtensionContext): void {
 ```
 
 **Replace ProgressLocation.Window** (4 files):
+
 ```typescript
 // BEFORE
 vscode.window.withProgress(
@@ -716,6 +775,7 @@ vscode.window.withProgress(
 ```
 
 **Add Resource Cleanup**:
+
 ```typescript
 // src/extension.ts
 export function deactivate(): void {
@@ -763,33 +823,34 @@ export function deactivate(): void {
 ### Step 4.1: Setup MSW for HTTP Mocking
 
 **Create test fixtures**:
+
 ```typescript
 // test/fixtures/redmine-api.ts
-import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
 
 export const redmineHandlers = [
-  http.get('http://localhost:3000/issues.json', () => {
+  http.get("http://localhost:3000/issues.json", () => {
     return HttpResponse.json({
       issues: [
         {
           id: 123,
-          subject: 'Test issue',
-          status: { id: 1, name: 'New' },
-          tracker: { id: 1, name: 'Bug' },
-          author: { id: 1, name: 'John Doe' },
-          project: { id: 1, name: 'Test Project' },
+          subject: "Test issue",
+          status: { id: 1, name: "New" },
+          tracker: { id: 1, name: "Bug" },
+          author: { id: 1, name: "John Doe" },
+          project: { id: 1, name: "Test Project" },
         },
       ],
       total_count: 1,
     });
   }),
 
-  http.put('http://localhost:3000/issues/:id.json', () => {
+  http.put("http://localhost:3000/issues/:id.json", () => {
     return HttpResponse.json({ success: true });
   }),
 
-  http.post('http://localhost:3000/time_entries.json', () => {
+  http.post("http://localhost:3000/time_entries.json", () => {
     return HttpResponse.json({ time_entry: { id: 1 } });
   }),
 ];
@@ -802,13 +863,14 @@ export const mockServer = setupServer(...redmineHandlers);
 ### Step 4.2: Write Unit Tests
 
 **RedmineServer tests**:
+
 ```typescript
 // test/unit/redmine/redmine-server.test.ts
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { RedmineServer } from '../../../src/redmine/redmine-server';
-import { mockServer } from '../../fixtures/redmine-api';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { RedmineServer } from "../../../src/redmine/redmine-server";
+import { mockServer } from "../../fixtures/redmine-api";
 
-describe('RedmineServer', () => {
+describe("RedmineServer", () => {
   let server: RedmineServer;
 
   beforeAll(() => mockServer.listen());
@@ -817,42 +879,43 @@ describe('RedmineServer', () => {
 
   beforeEach(() => {
     server = new RedmineServer({
-      address: 'http://localhost:3000',
-      key: 'test-api-key',
+      address: "http://localhost:3000",
+      key: "test-api-key",
     });
   });
 
-  it('should fetch issues assigned to me', async () => {
+  it("should fetch issues assigned to me", async () => {
     const result = await server.getIssuesAssignedToMe();
     expect(result.issues).toHaveLength(1);
-    expect(result.issues[0].subject).toBe('Test issue');
+    expect(result.issues[0].subject).toBe("Test issue");
   });
 
-  it('should update issue status', async () => {
+  it("should update issue status", async () => {
     const issue = { id: 123 } as any;
     await expect(server.setIssueStatus(issue, 2)).resolves.not.toThrow();
   });
 
-  it('should add time entry', async () => {
+  it("should add time entry", async () => {
     await expect(
-      server.addTimeEntry(123, 9, '1.5', 'Test work')
+      server.addTimeEntry(123, 9, "1.5", "Test work")
     ).resolves.not.toThrow();
   });
 });
 ```
 
 **Command tests**:
+
 ```typescript
 // test/unit/commands/list-open-issues.test.ts
-import { describe, it, expect, vi } from 'vitest';
-import * as vscode from 'vscode';
-import listOpenIssues from '../../../src/commands/list-open-issues-assigned-to-me';
+import { describe, it, expect, vi } from "vitest";
+import * as vscode from "vscode";
+import listOpenIssues from "../../../src/commands/list-open-issues-assigned-to-me";
 
-describe('listOpenIssuesAssignedToMe', () => {
-  it('should fetch and display issues', async () => {
+describe("listOpenIssuesAssignedToMe", () => {
+  it("should fetch and display issues", async () => {
     const mockServer = {
       getIssuesAssignedToMe: vi.fn().mockResolvedValue({ issues: [] }),
-      options: { url: { hostname: 'test.redmine.com' } },
+      options: { url: { hostname: "test.redmine.com" } },
     };
 
     const props = { server: mockServer, config: {} };
@@ -869,6 +932,7 @@ describe('listOpenIssuesAssignedToMe', () => {
 ### Step 4.3: Setup CI
 
 **.github/workflows/ci.yml**:
+
 ```yaml
 name: CI
 
@@ -887,8 +951,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - run: npm ci
 
@@ -927,20 +991,24 @@ jobs:
 ## Detailed Steps
 
 ### Step 1: Update VS Code
+
 Minimum version: 1.85.0 (released Aug 2023)
 Check: Help → About
 
 ### Step 2: Update Extension
+
 Extensions view → Update "Redmine for Positron"
 
 ### Step 3: Migrate API Key
 
 **Automatic** (recommended):
+
 - Extension detects old config
 - Prompts to migrate on first use
 - Moves key to secure storage
 
 **Manual**:
+
 1. Get API key from Redmine `/my/account`
 2. Delete `redmine.apiKey` from `.vscode/settings.json`
 3. Run: `Redmine: Set API Key`
@@ -948,10 +1016,10 @@ Extensions view → Update "Redmine for Positron"
 
 ### Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| "API key not found" | Run "Redmine: Set API Key" |
-| Key disappeared | Check VS Code updated to 1.85+ |
+| Issue               | Solution                       |
+| ------------------- | ------------------------------ |
+| "API key not found" | Run "Redmine: Set API Key"     |
+| Key disappeared     | Check VS Code updated to 1.85+ |
 
 ## Breaking Changes
 
@@ -975,17 +1043,21 @@ Extensions view → Update "Redmine for Positron"
 - **Bundle size reduced**: 80KB smaller (lodash removed)
 
 ### Migration
+
 See [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md)
 
 ### Added
+
 - `redmine.setApiKey` command
 - Comprehensive test suite (60% coverage)
 
 ### Removed
+
 - lodash dependency
 - Deprecated VS Code APIs
 
 ### Fixed
+
 - Memory leaks (EventEmitter disposal)
 - URL parsing edge cases
 ```
@@ -1041,12 +1113,12 @@ git push origin v3.0.0
 
 ## Risk Assessment
 
-| Risk | Mitigation |
-|------|------------|
+| Risk                        | Mitigation                               |
+| --------------------------- | ---------------------------------------- |
 | TypeScript 5.7 breaks build | Incremental migration, extensive testing |
-| url.parse() edge cases | Comprehensive URL test suite |
-| Secrets unavailable (Linux) | Error handling, fallback prompts |
-| Lost API keys | Auto-migration with notification |
+| url.parse() edge cases      | Comprehensive URL test suite             |
+| Secrets unavailable (Linux) | Error handling, fallback prompts         |
+| Lost API keys               | Auto-migration with notification         |
 
 ---
 
@@ -1076,6 +1148,7 @@ git push origin v3.0.0
 ### Key Files to Modify
 
 **Phase 0-1**:
+
 - `esbuild.js` (fix null check, rename to .cjs)
 - `package.json` (deps, scripts)
 - `tsconfig.json` (ES2022, bundler)
@@ -1084,18 +1157,21 @@ git push origin v3.0.0
 - 4 command files (url.host → url.hostname)
 
 **Phase 3**:
+
 - New: `src/utilities/secret-manager.ts`
 - New: `src/commands/set-api-key.ts`
 - Update: `src/extension.ts` (secrets integration)
 - Update: `package.json` (deprecate apiKey config)
 
 **Phase 4**:
+
 - New: `test/mocks/vscode.ts`
 - New: `test/fixtures/redmine-api.ts`
 - New: `test/unit/**/*.test.ts`
 - New: `.github/workflows/ci.yml`
 
 **Phase 5**:
+
 - New: `MIGRATION_GUIDE.md`
 - Update: `CHANGELOG.md`, `README.md`
 
@@ -1175,7 +1251,7 @@ afterAll(() => mockServer.close());
 
 ```typescript
 // Build key
-const key = `redmine:${Buffer.from(uri.toString()).toString('hex')}:apiKey:v1`;
+const key = `redmine:${Buffer.from(uri.toString()).toString("hex")}:apiKey:v1`;
 
 // Store
 await context.secrets.store(key, apiKey);
@@ -1188,7 +1264,7 @@ await context.secrets.delete(key);
 
 // Listen
 context.secrets.onDidChange((event) => {
-  if (event.key.startsWith('redmine:')) {
+  if (event.key.startsWith("redmine:")) {
     // refresh
   }
 });

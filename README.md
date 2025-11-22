@@ -86,6 +86,7 @@ See [change log](./CHANGELOG.md)
 ## Contributors
 
 This extension builds upon the excellent work of:
+
 - **Tomasz Domański** ([@rozpuszczalny](https://github.com/rozpuszczalny)) - Original author
 - **Doğan Özdoğan** - Tree view feature
 - **Markus Amshove** - Quick update feature

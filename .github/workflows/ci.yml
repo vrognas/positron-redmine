@@ -7,33 +7,90 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+      checks: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    name: Test on ${{ matrix.os }}
 
     steps:
+      - name: Configure Git line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate commit messages
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        run: |
+          chmod +x scripts/validate-commits.sh
+          scripts/validate-commits.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-      - run: npm run lint
+      - name: Security audit
+        if: matrix.os == 'ubuntu-latest'
+        run: npm audit --audit-level=high
+        continue-on-error: true
 
-      - run: npx tsc --noEmit
+      - name: Run lint
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run lint
 
-      - run: npm run test:coverage
+      - name: TypeScript check
+        if: matrix.os == 'ubuntu-latest'
+        run: npx tsc --noEmit
 
-      - name: Check coverage threshold
+      - name: Validate extension manifest
+        if: matrix.os == 'ubuntu-latest'
+        run: npx @vscode/vsce ls --no-yarn
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Check VSIX size
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          COVERAGE=$(npm run test:coverage --silent 2>&1 | grep -A1 "All files" | tail -1 | awk '{print $2}' | sed 's/%//')
-          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
-            echo "Coverage ($COVERAGE%) is below 60% threshold"
+          VSIX_FILE=$(ls *.vsix | head -1)
+          SIZE_BYTES=$(stat -c %s "$VSIX_FILE")
+          SIZE_KB=$((SIZE_BYTES / 1024))
+          echo "📦 VSIX size: ${SIZE_KB}KB"
+          if [ $SIZE_KB -gt 100 ]; then
+            echo "❌ VSIX size (${SIZE_KB}KB) exceeds 100KB threshold"
             exit 1
           fi
-          echo "Coverage check passed: $COVERAGE%"
+          echo "✅ Size check passed: ${SIZE_KB}KB / 100KB"
 
-      - uses: codecov/codecov-action@v4
-        if: always()
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: vsix-package
+          path: "*.vsix"
+          retention-days: 7

@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import { RedmineServer } from "../redmine/redmine-server";
-import { RedmineConfig } from "../definitions/redmine-config";
 import { RedmineProject } from "../redmine/redmine-project";
 import { Issue } from "../redmine/models/issue";
 
@@ -10,7 +9,8 @@ export enum ProjectsViewStyle {
 }
 
 export class ProjectsTree
-  implements vscode.TreeDataProvider<RedmineProject | Issue> {
+  implements vscode.TreeDataProvider<RedmineProject | Issue>
+{
   server?: RedmineServer;
   viewStyle: ProjectsViewStyle;
   projects: RedmineProject[] | null = null;
@@ -20,8 +20,7 @@ export class ProjectsTree
   }
 
   onDidChangeTreeData$ = new vscode.EventEmitter<void>();
-  onDidChangeTreeData: vscode.Event<void> = this
-    .onDidChangeTreeData$.event;
+  onDidChangeTreeData: vscode.Event<void> = this.onDidChangeTreeData$.event;
   getTreeItem(
     projectOrIssue: RedmineProject | Issue
   ): vscode.TreeItem | Thenable<vscode.TreeItem> {
@@ -58,7 +57,9 @@ export class ProjectsTree
       projectOrIssue instanceof RedmineProject
     ) {
       if (this.viewStyle === ProjectsViewStyle.TREE) {
-        const subprojects: (RedmineProject | Issue)[] = (this.projects ?? []).filter(
+        const subprojects: (RedmineProject | Issue)[] = (
+          this.projects ?? []
+        ).filter(
           (project) => project.parent && project.parent.id === projectOrIssue.id
         );
         return subprojects.concat(
