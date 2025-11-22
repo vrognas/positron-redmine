@@ -24,6 +24,6 @@ coverage/**
 
 # Keep only essential docs
 *.md
-!readme.md
-!changelog.md
+!README.md
+!CHANGELOG.md
 !LICENSE.md
