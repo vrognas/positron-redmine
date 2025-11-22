@@ -39,7 +39,7 @@ This extension works with both **Positron IDE** and **VS Code**.
 
 ## Requirements
 
-- VS Code 1.85.0+
+- VS Code 1.106.0+
 - Redmine with REST API enabled (`/settings?tab=api`, requires admin)
 - API key from Redmine account (`/my/account`)
 

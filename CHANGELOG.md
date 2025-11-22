@@ -9,7 +9,7 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 ### BREAKING CHANGES
 
 - **API keys in Secrets**: Machine-local, encrypted storage
-- **VS Code 1.85+ required**: For Secrets API support
+- **VS Code 1.106+ required**: For latest API compatibility
 - **TypeScript 5.7**: Modern language features
 - **Bundle size reduced**: 80KB smaller (lodash removed)
 
