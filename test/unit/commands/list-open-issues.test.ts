@@ -10,7 +10,7 @@ describe("listOpenIssuesAssignedToMe", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(vscode.window.withProgress).mockImplementation(
-      async (_options, callback) => callback({ report: vi.fn() } as any)
+      async (_options, callback) => callback({ report: vi.fn() } as vscode.Progress<{ message?: string; increment?: number }>)
     );
   });
 

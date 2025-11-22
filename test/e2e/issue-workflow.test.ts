@@ -9,7 +9,7 @@ import { Membership, IssueStatus } from "../../src/controllers/domain";
 
 vi.mock("vscode");
 
-let mockHttpResponses: any[] = [];
+let mockHttpResponses: unknown[] = [];
 let mockHttpResponseIndex = 0;
 
 vi.mock("http", async () => {
@@ -17,9 +17,9 @@ vi.mock("http", async () => {
   return {
     ...actual,
     request: vi.fn((options, callback) => {
-      const request = new EventEmitter() as any;
+      const request = new EventEmitter() as unknown as http.ClientRequest;
       request.end = function () {
-        const response = new EventEmitter() as any;
+        const response = new EventEmitter() as unknown as http.IncomingMessage;
         response.statusCode = 200;
         response.statusMessage = "OK";
 
@@ -34,7 +34,7 @@ vi.mock("http", async () => {
 
         callback(response);
       };
-      request.on = function (event: string, handler: any) {
+      request.on = function (event: string, handler: (...args: unknown[]) => void) {
         EventEmitter.prototype.on.call(this, event, handler);
         return this;
       };
@@ -49,7 +49,7 @@ describe("Issue Workflow E2E", () => {
     mockHttpResponses = [];
     mockHttpResponseIndex = 0;
     vi.mocked(vscode.window.withProgress).mockImplementation(
-      async (_options, callback) => callback({ report: vi.fn() } as any)
+      async (_options, callback) => callback({ report: vi.fn() } as vscode.Progress<{ message?: string; increment?: number }>)
     );
   });
 
@@ -84,17 +84,17 @@ describe("Issue Workflow E2E", () => {
         description: "Test description",
         detail: "Issue #123 assigned to User",
         fullIssue: mockIssue,
-      } as any)
+      } as vscode.QuickPickItem & { fullIssue: typeof mockIssue })
       // Mock selecting "Change status" action
       .mockResolvedValueOnce({
         action: "changeStatus",
         label: "Change status",
-      } as any)
+      } as vscode.QuickPickItem & { action: string })
       // Mock selecting new status
       .mockResolvedValueOnce({
         label: "Resolved",
         fullIssue: { id: 2, name: "Resolved" },
-      } as any);
+      } as vscode.QuickPickItem & { fullIssue: { id: number; name: string } });
 
     await listOpenIssuesAssignedToMe({ server, config: {} });
 
@@ -131,13 +131,13 @@ describe("Issue Workflow E2E", () => {
       key: "testkey",
     });
 
-    const controller = new IssueController(mockIssue as any, server);
+    const controller = new IssueController(mockIssue as Parameters<typeof IssueController>[0], server);
 
     // Mock activity selection
     vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce({
       label: "Development",
       activity: mockActivity,
-    } as any);
+    } as vscode.QuickPickItem & { activity: typeof mockActivity });
 
     // Mock hours|message input
     vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce("2.5|Fixed bug");
@@ -164,27 +164,22 @@ describe("Issue Workflow E2E", () => {
       assigned_to: { id: 1, name: "User" },
     };
 
-    // Setup HTTP responses: 1) getMemberships, 2) getIssueStatuses, 3) applyQuickUpdate, 4) getIssueById
+    // Setup HTTP responses: 1) applyQuickUpdate PUT, 2) getIssueById GET
     mockHttpResponses = [
-      { memberships: [{ user: { id: 2, name: "NewUser" } }] },
-      { issue_statuses: [{ id: 3, name: "Resolved" }] },
-      {},
+      {}, // PUT /issues/789.json response
       {
         issue: {
           ...mockIssue,
           assigned_to: { id: 2, name: "NewUser" },
           status: { id: 3, name: "Resolved" },
         },
-      },
+      }, // GET /issues/789.json response
     ];
 
     const server = new RedmineServer({
       address: "http://localhost:3000",
       key: "testkey",
     });
-
-    const memberships = await server.getMemberships(1);
-    const statuses = await server.getIssueStatusesTyped();
 
     const quickUpdate = {
       issueId: 789,

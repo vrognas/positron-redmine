@@ -169,7 +169,7 @@ describe("Multi-server workflow", () => {
     expect(server1.compare(server4)).toBe(false);
 
     // Simulate tree switching (changeDefaultServer command)
-    let currentServer = server1;
+    const currentServer = server1;
     const mockTree = {
       server: currentServer,
       setServer: (s: RedmineServer) => {
@@ -201,7 +201,7 @@ describe("Multi-server workflow", () => {
     };
 
     // Create initial server
-    let server = new RedmineServer({
+    const server = new RedmineServer({
       address: config.url,
       key: config.apiKey,
     });

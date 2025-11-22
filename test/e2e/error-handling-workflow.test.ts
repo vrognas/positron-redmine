@@ -15,7 +15,7 @@ vi.mock("http", async () => {
   return {
     ...actual,
     request: vi.fn((options, callback) => {
-      const request = new EventEmitter() as any;
+      const request = new EventEmitter() as http.ClientRequest;
       request.end = function () {
         if (mockHttpBehavior === "network-error") {
           const error = new Error("connect ECONNREFUSED");
@@ -24,7 +24,7 @@ vi.mock("http", async () => {
           return;
         }
 
-        const response = new EventEmitter() as any;
+        const response = new EventEmitter() as http.IncomingMessage;
 
         if (mockHttpBehavior === "401") {
           response.statusCode = 401;
@@ -68,7 +68,7 @@ vi.mock("http", async () => {
 
         callback(response);
       };
-      request.on = function (event: string, handler: any) {
+      request.on = function (event: string, handler: (...args: unknown[]) => void) {
         EventEmitter.prototype.on.call(this, event, handler);
         return this;
       };
@@ -82,7 +82,7 @@ describe("Error Handling Workflow E2E", () => {
     vi.clearAllMocks();
     mockHttpBehavior = "success";
     vi.mocked(vscode.window.withProgress).mockImplementation(
-      async (_options, callback) => callback({ report: vi.fn() } as any)
+      async (_options, callback) => callback({ report: vi.fn() } as vscode.Progress<{ message?: string; increment?: number }>)
     );
   });
 
@@ -158,9 +158,9 @@ describe("Error Handling Workflow E2E", () => {
     const mockServer = {
       getIssueStatuses: vi.fn(),
       options: { address: "http://test", url: { hostname: "test" } },
-    } as any;
+    } as Partial<RedmineServer>;
 
-    const controller = new IssueController(mockIssue as any, mockServer);
+    const controller = new IssueController(mockIssue as Parameters<typeof IssueController>[0], mockServer as RedmineServer);
     await controller.listActions();
 
     expect(mockServer.getIssueStatuses).not.toHaveBeenCalled();
@@ -178,7 +178,7 @@ describe("Error Handling Workflow E2E", () => {
       message: "test",
       assignee: { id: 2, name: "NewUser", isUser: true },
       status: { statusId: 2, name: "Resolved" },
-    } as any);
+    } as Parameters<typeof server2.applyQuickUpdate>[0]);
 
     expect(result.isSuccessful()).toBe(false);
     expect(result.differences.length).toBeGreaterThan(0);
