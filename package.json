@@ -160,7 +160,7 @@
       "properties": {
         "redmine.url": {
           "type": "string",
-          "description": "URL of Redmine server",
+          "description": "URL of Redmine server (changing/removing this will require reconfiguring API key)",
           "examples": [
             "https://example.com",
             "http://example.com:8080",

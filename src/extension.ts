@@ -196,8 +196,12 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   async function promptForUrl(currentUrl?: string): Promise<string | undefined> {
+    const prompt = currentUrl
+      ? 'Update your Redmine server URL (changing URL will require new API key)'
+      : 'Step 1/2: Enter your Redmine server URL';
+
     return await vscode.window.showInputBox({
-      prompt: currentUrl ? 'Update your Redmine server URL' : 'Step 1/2: Enter your Redmine server URL',
+      prompt,
       value: currentUrl,
       placeHolder: 'https://redmine.example.com',
       validateInput: (value) => {
