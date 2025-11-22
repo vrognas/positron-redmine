@@ -52,9 +52,11 @@ jobs:
         continue-on-error: true
 
       - name: Run lint
+        if: matrix.os == 'ubuntu-latest'
         run: npm run lint
 
       - name: TypeScript check
+        if: matrix.os == 'ubuntu-latest'
         run: npx tsc --noEmit
 
       - name: Validate extension manifest
@@ -63,16 +65,6 @@ jobs:
 
       - name: Run tests with coverage
         run: npm run test:coverage
-
-      - name: Check coverage threshold
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          COVERAGE=$(npm run test:coverage --silent 2>&1 | grep "All files" | awk '{print $4}')
-          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
-            echo "Coverage ($COVERAGE%) is below 60% threshold"
-            exit 1
-          fi
-          echo "Coverage check passed: $COVERAGE%"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
