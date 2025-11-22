@@ -29,12 +29,53 @@ vi.mock('http', async () => {
                   tracker: { id: 1, name: 'Bug' },
                   author: { id: 1, name: 'John Doe' },
                   project: { id: 1, name: 'Test Project' },
+                  assigned_to: { id: 1, name: 'John Doe' },
                 },
               ],
               total_count: 1,
             };
-          } else if (options.method === 'PUT' && path.match(/\/issues\/\d+\.json/)) {
-            data = { success: true };
+          } else if (path.match(/\/issues\/\d+\.json/)) {
+            if (options.method === 'GET') {
+              data = {
+                issue: {
+                  id: 123,
+                  subject: 'Test issue',
+                  status: { id: 1, name: 'New' },
+                  tracker: { id: 1, name: 'Bug' },
+                  author: { id: 1, name: 'John Doe' },
+                  project: { id: 1, name: 'Test Project' },
+                  assigned_to: { id: 1, name: 'John Doe' },
+                },
+              };
+            } else if (options.method === 'PUT') {
+              data = { success: true };
+            }
+          } else if (options.method === 'GET' && path.includes('/projects.json')) {
+            data = {
+              projects: [
+                { id: 1, name: 'Test Project', identifier: 'test' },
+              ],
+              total_count: 1,
+            };
+          } else if (options.method === 'GET' && path.includes('/issue_statuses.json')) {
+            data = {
+              issue_statuses: [
+                { id: 1, name: 'New' },
+                { id: 2, name: 'In Progress' },
+              ],
+            };
+          } else if (options.method === 'GET' && path.includes('/time_entry_activities.json')) {
+            data = {
+              time_entry_activities: [
+                { id: 9, name: 'Development' },
+              ],
+            };
+          } else if (options.method === 'GET' && path.match(/\/projects\/\d+\/memberships\.json/)) {
+            data = {
+              memberships: [
+                { user: { id: 1, name: 'John Doe' } },
+              ],
+            };
           } else if (options.method === 'POST' && path.includes('/time_entries.json')) {
             data = { time_entry: { id: 1 } };
           } else {
@@ -81,5 +122,79 @@ describe('RedmineServer', () => {
     await expect(
       server.addTimeEntry(123, 9, '1.5', 'Test work')
     ).resolves.not.toThrow();
+  });
+
+  it('should fetch projects', async () => {
+    const projects = await server.getProjects();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].toQuickPickItem().label).toBe('Test Project');
+  });
+
+  it('should fetch issue by id', async () => {
+    const result = await server.getIssueById(123);
+    expect(result.issue.id).toBe(123);
+    expect(result.issue.subject).toBe('Test issue');
+  });
+
+  it('should fetch issue statuses', async () => {
+    const result = await server.getIssueStatuses();
+    expect(result.issue_statuses).toHaveLength(2);
+    expect(result.issue_statuses[0].name).toBe('New');
+  });
+
+  it('should cache issue statuses', async () => {
+    await server.getIssueStatuses();
+    const result = await server.getIssueStatuses();
+    expect(result.issue_statuses).toHaveLength(2);
+  });
+
+  it('should fetch time entry activities', async () => {
+    const result = await server.getTimeEntryActivities();
+    expect(result.time_entry_activities).toHaveLength(1);
+    expect(result.time_entry_activities[0].name).toBe('Development');
+  });
+
+  it('should cache time entry activities', async () => {
+    await server.getTimeEntryActivities();
+    const result = await server.getTimeEntryActivities();
+    expect(result.time_entry_activities).toHaveLength(1);
+  });
+
+  it('should fetch memberships', async () => {
+    const memberships = await server.getMemberships(1);
+    expect(memberships).toHaveLength(1);
+    expect(memberships[0].name).toBe('John Doe');
+    expect(memberships[0].isUser).toBe(true);
+  });
+
+  it('should fetch typed issue statuses', async () => {
+    const statuses = await server.getIssueStatusesTyped();
+    expect(statuses).toHaveLength(2);
+    expect(statuses[0].name).toBe('New');
+  });
+
+  it('should fetch open issues for project', async () => {
+    const result = await server.getOpenIssuesForProject(1, true);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0].id).toBe(123);
+  });
+
+  it('should fetch open issues for project without subprojects', async () => {
+    const result = await server.getOpenIssuesForProject(1, false);
+    expect(result.issues).toHaveLength(1);
+  });
+
+  it('should compare servers correctly', () => {
+    const server2 = new RedmineServer({
+      address: 'http://localhost:3000',
+      key: 'test-api-key',
+    });
+    expect(server.compare(server2)).toBe(true);
+
+    const server3 = new RedmineServer({
+      address: 'http://localhost:3001',
+      key: 'test-api-key',
+    });
+    expect(server.compare(server3)).toBe(false);
   });
 });
