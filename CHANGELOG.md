@@ -7,16 +7,19 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 ## [3.0.1] - 2025-11-22
 
 ### Added
+
 - Configure icon in view title (always visible)
 - Config change listener: auto-update when URL/API key removed
 - Security info modal on first-time setup (explains credential storage)
 - Settings descriptions with security details
 
 ### Changed
+
 - All Redmine settings now save to User settings (machine scope, not synced)
 - URL prompt warns about API key reconfiguration when changing URL
 
 ### Fixed
+
 - SVG logo: removed external DTD/entity references (eliminates browser fetch spam)
 - Tree refresh guard: prevent fetches when server not configured
 - Server cleared from trees when config removed
@@ -32,17 +35,21 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 - **Bundle size reduced**: 80KB smaller (lodash removed)
 
 ### Migration
+
 See [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md)
 
 ### Added
+
 - `redmine.setApiKey` command
 - Comprehensive test suite (60% coverage)
 
 ### Removed
+
 - lodash dependency
 - Deprecated VS Code APIs
 
 ### Fixed
+
 - Memory leaks (EventEmitter disposal)
 - URL parsing edge cases
 

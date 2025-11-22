@@ -3,11 +3,11 @@ name: Publish Extension
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to publish (e.g., v3.0.1)'
+        description: "Tag to publish (e.g., v3.0.1)"
         required: true
         type: string
 
@@ -22,8 +22,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -93,7 +93,7 @@ jobs:
           tag_name: ${{ steps.get_version.outputs.TAG }}
           name: Release ${{ steps.get_version.outputs.VERSION }}
           body: ${{ steps.changelog.outputs.NOTES }}
-          files: '*.vsix'
+          files: "*.vsix"
           draft: false
           prerelease: false
         env:

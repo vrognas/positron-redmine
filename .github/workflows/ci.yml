@@ -22,10 +22,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - name: Install dependencies
+        env:
+          npm_config_optional: false
         run: npm ci
 
       - name: Run lint
@@ -60,5 +62,5 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         with:
           name: vsix-package
-          path: '*.vsix'
+          path: "*.vsix"
           retention-days: 7
