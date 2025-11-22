@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 export default defineConfig({
   test: {
     environment: "node",
+    fileParallelism: true,
+    isolate: false,
     alias: {
       vscode: resolve(__dirname, "./test/mocks/vscode.ts"),
     },
