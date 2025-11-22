@@ -1,0 +1,52 @@
+name: Feature Request
+description: Suggest a feature (discussion preferred)
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Preferred**: Use [Discussions](https://github.com/vrognas/positron-redmine/discussions) for feature requests.
+
+        This form is for tracking approved features only. New ideas should be discussed first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What workflow problem does this solve?
+      placeholder: "When I work with issues, I need to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How should the feature work?
+      placeholder: "Add a command that..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Other solutions you've thought of
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Feature impact level
+      options:
+        - Small (single command)
+        - Medium (new view/tree)
+        - Large (major refactor)
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I'm willing to submit a PR for this feature

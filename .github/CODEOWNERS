@@ -1,0 +1,20 @@
+# Code Owners
+# Automatically request reviews from these users
+
+# Default owner for everything
+* @vrognas
+
+# Security-sensitive files
+/SECURITY.md @vrognas
+/.github/workflows/*.yml @vrognas
+
+# Configuration and build
+/package.json @vrognas
+/tsconfig.json @vrognas
+/esbuild.cjs @vrognas
+/vitest.config.ts @vrognas
+
+# Documentation
+/docs/ @vrognas
+/CONTRIBUTING.md @vrognas
+/MIGRATION_GUIDE.md @vrognas
