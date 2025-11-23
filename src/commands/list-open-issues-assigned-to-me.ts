@@ -25,22 +25,18 @@ const mapIssueToPickItem = (issue: Issue): PickItem => ({
 });
 
 export default async ({ server }: ActionProperties) => {
-  const promise = server.getIssuesAssignedToMe();
-
-  vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-    },
-    (progress) => {
-      progress.report({
-        message: `Waiting for response from ${server.options.url.hostname}...`,
-      });
-      return promise;
-    }
-  );
-
   try {
-    const issues = await promise;
+    const issues = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+      },
+      async (progress) => {
+        progress.report({
+          message: `Waiting for response from ${server.options.url.hostname}...`,
+        });
+        return await server.getIssuesAssignedToMe();
+      }
+    );
 
     const issue = await vscode.window.showQuickPick(
       issues.issues.map(mapIssueToPickItem)

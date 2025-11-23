@@ -48,7 +48,11 @@ vi.mock("http", async () => {
           response.statusMessage = "OK";
         }
 
-        setTimeout(() => {
+        if (callback) {
+          callback(response);
+        }
+
+        setImmediate(() => {
           if (mockHttpBehavior === "invalid-json") {
             response.emit("data", Buffer.from("invalid{json"));
           } else if (mockHttpBehavior === "partial-update") {
@@ -66,11 +70,8 @@ vi.mock("http", async () => {
             response.emit("data", Buffer.from(JSON.stringify({ error: "Error" })));
           }
           response.emit("end");
-        }, 0);
+        });
 
-        if (callback) {
-          callback(response);
-        }
         return this;
       };
 

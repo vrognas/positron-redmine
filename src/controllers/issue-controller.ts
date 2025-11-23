@@ -27,7 +27,7 @@ export class IssueController {
         }
       )
       .then((act) => {
-        if (!act) return;
+        if (!act || !act.activity) return;
 
         return this.setTimeEntryMessage(act.activity);
       });
@@ -255,25 +255,20 @@ export class IssueController {
           placeHolder: "Pick an action to do",
         }
       )
-      .then(
-        (option) => {
-          if (!option) return;
-          if (option.action === "openInBrowser") {
-            return this.openInBrowser();
-          }
-          if (option.action === "changeStatus") {
-            return this.changeStatus();
-          }
-          if (option.action === "addTimeEntry") {
-            return this.addTimeEntry();
-          }
-          if (option.action === "quickUpdate") {
-            return this.quickUpdate();
-          }
-        },
-        (_error) => {
-          /* ? */
+      .then((option) => {
+        if (!option) return;
+        if (option.action === "openInBrowser") {
+          return this.openInBrowser();
         }
-      );
+        if (option.action === "changeStatus") {
+          return this.changeStatus();
+        }
+        if (option.action === "addTimeEntry") {
+          return this.addTimeEntry();
+        }
+        if (option.action === "quickUpdate") {
+          return this.quickUpdate();
+        }
+      });
   }
 }

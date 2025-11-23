@@ -30,7 +30,11 @@ vi.mock("http", async () => {
         response.statusCode = 200;
         response.statusMessage = "OK";
 
-        setTimeout(() => {
+        if (callback) {
+          callback(response);
+        }
+
+        setImmediate(() => {
           const responseData = mockHttpResponses[mockHttpResponseIndex] || null;
           mockHttpResponseIndex++;
 
@@ -38,11 +42,8 @@ vi.mock("http", async () => {
             response.emit("data", Buffer.from(JSON.stringify(responseData)));
           }
           response.emit("end");
-        }, 0);
+        });
 
-        if (callback) {
-          callback(response);
-        }
         return this;
       };
 
