@@ -824,4 +824,145 @@ describe("LoggingRedmineServer", () => {
       expect.stringContaining("admin@example.com")
     );
   });
+
+  it("redacts api_key in query params", async () => {
+    const server = new LoggingRedmineServer(
+      {
+        address: "http://localhost",
+        key: "test-key",
+        rejectUnauthorized: false,
+        additionalHeaders: {},
+      },
+      mockChannel as unknown as vscode.OutputChannel,
+      { enabled: true }
+    );
+
+    await server.doRequest("/users.json?api_key=secret123", "GET");
+
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("api_key=***")
+    );
+    expect(mockChannel.appendLine).not.toHaveBeenCalledWith(
+      expect.stringContaining("secret123")
+    );
+  });
+
+  it("redacts token in query params", async () => {
+    const server = new LoggingRedmineServer(
+      {
+        address: "http://localhost",
+        key: "test-key",
+        rejectUnauthorized: false,
+        additionalHeaders: {},
+      },
+      mockChannel as unknown as vscode.OutputChannel,
+      { enabled: true }
+    );
+
+    await server.doRequest("/issues.json?token=bearer-abc123", "GET");
+
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("token=***")
+    );
+    expect(mockChannel.appendLine).not.toHaveBeenCalledWith(
+      expect.stringContaining("bearer-abc123")
+    );
+  });
+
+  it("redacts multiple sensitive query params", async () => {
+    const server = new LoggingRedmineServer(
+      {
+        address: "http://localhost",
+        key: "test-key",
+        rejectUnauthorized: false,
+        additionalHeaders: {},
+      },
+      mockChannel as unknown as vscode.OutputChannel,
+      { enabled: true }
+    );
+
+    await server.doRequest("/users.json?api_key=secret&password=pass123&id=5", "GET");
+
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("api_key=***")
+    );
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("password=***")
+    );
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("id=5")
+    );
+    expect(mockChannel.appendLine).not.toHaveBeenCalledWith(
+      expect.stringContaining("secret")
+    );
+    expect(mockChannel.appendLine).not.toHaveBeenCalledWith(
+      expect.stringContaining("pass123")
+    );
+  });
+
+  it("preserves non-sensitive query params", async () => {
+    const server = new LoggingRedmineServer(
+      {
+        address: "http://localhost",
+        key: "test-key",
+        rejectUnauthorized: false,
+        additionalHeaders: {},
+      },
+      mockChannel as unknown as vscode.OutputChannel,
+      { enabled: true }
+    );
+
+    await server.doRequest("/issues.json?status_id=open&project_id=42", "GET");
+
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("status_id=open")
+    );
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("project_id=42")
+    );
+  });
+
+  it("handles concurrent requests correctly", async () => {
+    const server = new LoggingRedmineServer(
+      {
+        address: "http://localhost",
+        key: "test-key",
+        rejectUnauthorized: false,
+        additionalHeaders: {},
+      },
+      mockChannel as unknown as vscode.OutputChannel,
+      { enabled: true }
+    );
+
+    // Make 3 concurrent requests to different endpoints
+    const promises = [
+      server.doRequest("/projects.json", "GET"),
+      server.doRequest("/issues.json", "GET"),
+      server.doRequest("/users.json", "GET")
+    ];
+
+    await Promise.all(promises);
+
+    // Verify all requests were logged
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("[1] GET /projects.json")
+    );
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("[2] GET /issues.json")
+    );
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("[3] GET /users.json")
+    );
+
+    // Verify all responses were logged with correct counter
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("[1] → 200")
+    );
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("[2] → 200")
+    );
+    expect(mockChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining("[3] → 200")
+    );
+  });
 });
