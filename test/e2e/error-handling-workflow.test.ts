@@ -22,7 +22,7 @@ vi.mock("http", async () => {
         if (mockHttpBehavior === "network-error") {
           const error = new Error("connect ECONNREFUSED") as NodeJS.ErrnoException;
           error.code = "ECONNREFUSED";
-          setTimeout(() => this.emit("error", error), 0);
+          setImmediate(() => this.emit("error", error));
           return this;
         }
 
