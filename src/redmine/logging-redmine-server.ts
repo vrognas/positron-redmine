@@ -15,7 +15,8 @@ export class LoggingRedmineServer extends RedmineServer {
   private logger: ApiLogger;
   private counter = 0;
   private loggingConfig: LoggingConfig;
-  private pendingRequests = new Map<number, { startTime: number; requestBody?: Buffer }>(); // requestId -> metadata
+  private pendingByPath = new Map<string, Array<{ startTime: number; displayId: number }>>();
+  private pendingBySymbol = new Map<symbol, { startTime: number; displayId: number }>();
 
   constructor(
     options: RedmineServerConnectionOptions,
@@ -36,34 +37,50 @@ export class LoggingRedmineServer extends RedmineServer {
       return super.doRequest<T>(path, method, data);
     }
 
-    const requestId = ++this.counter;
+    const displayId = ++this.counter;
     const startTime = Date.now();
-    this.pendingRequests.set(requestId, { startTime, requestBody: data });
 
-    this.logger.logRequest(requestId, method, path, data);
+    this.logger.logRequest(displayId, method, path, data);
 
-    return super.doRequest<T>(path, method, data).finally(() => {
-      this.pendingRequests.delete(requestId);
-    });
+    const pathKey = `${method}:${path}`;
+    if (!this.pendingByPath.has(pathKey)) {
+      this.pendingByPath.set(pathKey, []);
+    }
+    this.pendingByPath.get(pathKey)!.push({ startTime, displayId });
+
+    return super.doRequest<T>(path, method, data);
   }
 
   protected override onResponseSuccess(
     statusCode: number | undefined,
     _statusMessage: string | undefined,
-    _path: string,
-    _method: HttpMethods,
+    path: string,
+    method: HttpMethods,
     _requestBody?: Buffer,
     responseBody?: Buffer,
-    contentType?: string
+    contentType?: string,
+    requestId?: unknown
   ): void {
-    if (!this.loggingConfig.enabled) return;
+    if (!this.loggingConfig.enabled || typeof requestId !== 'symbol') return;
 
-    const requestId = this.counter;
-    const metadata = this.pendingRequests.get(requestId);
+    if (!this.pendingBySymbol.has(requestId)) {
+      const pathKey = `${method}:${path}`;
+      const queue = this.pendingByPath.get(pathKey);
+      if (queue && queue.length > 0) {
+        const metadata = queue.shift()!;
+        this.pendingBySymbol.set(requestId, metadata);
+        if (queue.length === 0) {
+          this.pendingByPath.delete(pathKey);
+        }
+      }
+    }
+
+    const metadata = this.pendingBySymbol.get(requestId);
     if (metadata) {
       const duration = Date.now() - metadata.startTime;
       const responseSize = responseBody?.length;
-      this.logger.logResponse(requestId, statusCode ?? 200, duration, responseSize, contentType);
+      this.logger.logResponse(metadata.displayId, statusCode ?? 200, duration, responseSize, contentType);
+      this.pendingBySymbol.delete(requestId);
     }
   }
 
@@ -71,19 +88,32 @@ export class LoggingRedmineServer extends RedmineServer {
     statusCode: number | undefined,
     _statusMessage: string | undefined,
     error: Error,
-    _path: string,
-    _method: HttpMethods,
+    path: string,
+    method: HttpMethods,
     _requestBody?: Buffer,
     responseBody?: Buffer,
-    _contentType?: string
+    _contentType?: string,
+    requestId?: unknown
   ): void {
-    if (!this.loggingConfig.enabled) return;
+    if (!this.loggingConfig.enabled || typeof requestId !== 'symbol') return;
 
-    const requestId = this.counter;
-    const metadata = this.pendingRequests.get(requestId);
+    if (!this.pendingBySymbol.has(requestId)) {
+      const pathKey = `${method}:${path}`;
+      const queue = this.pendingByPath.get(pathKey);
+      if (queue && queue.length > 0) {
+        const metadata = queue.shift()!;
+        this.pendingBySymbol.set(requestId, metadata);
+        if (queue.length === 0) {
+          this.pendingByPath.delete(pathKey);
+        }
+      }
+    }
+
+    const metadata = this.pendingBySymbol.get(requestId);
     if (metadata) {
       const duration = Date.now() - metadata.startTime;
-      this.logger.logError(requestId, error, duration, statusCode, responseBody);
+      this.logger.logError(metadata.displayId, error, duration, statusCode, responseBody);
+      this.pendingBySymbol.delete(requestId);
     }
   }
 }
