@@ -39,7 +39,8 @@ positron-redmine/
 │   ├── definitions/           # TypeScript interfaces
 │   │   └── redmine-config.ts  # Extension configuration schema
 │   └── utilities/             # Helper functions
-│       └── error-to-string.ts
+│       ├── error-to-string.ts
+│       └── secret-manager.ts  # Secure API key storage
 ├── docs/                      # Documentation
 │   ├── ARCHITECTURE.md       # This file
 │   └── LESSONS_LEARNED.md    # Development insights
@@ -57,9 +58,12 @@ positron-redmine/
 **Key Functions**:
 
 - `activate()`: Entry point called by VS Code
+  - Initializes `RedmineSecretManager` for secure API key storage
   - Initializes tree providers (`MyIssuesTree`, `ProjectsTree`)
   - Registers commands with `registerCommand()` wrapper
   - Sets up configuration parsing via `parseConfiguration()`
+  - Updates context (`updateConfiguredContext()`) to check URL + API key presence
+  - Listens for secret changes via `secretManager.onSecretChanged()`
   - Manages server instance bucket for reuse
 
 **Configuration System**:
@@ -67,8 +71,9 @@ positron-redmine/
 ```typescript
 parseConfiguration(withPick, props?, ...args)
   → Prompts workspace folder selection (multi-root workspace)
-  → Reads redmine.* config
-  → Creates/reuses RedmineServer instance
+  → Reads redmine.* config from workspace settings
+  → Retrieves API key from RedmineSecretManager (v3.0+)
+  → Creates/reuses RedmineServer instance with URL + API key
   → Returns ActionProperties { server, config }
 ```
 
@@ -191,6 +196,7 @@ getChildren(project) → Subprojects + issues for that project
 | `openActionsForIssue`               | `open-actions-for-issue.ts`              | Issue actions menu (status, time, browser) |
 | `openActionsForIssueUnderCursor`    | `open-actions-for-issue-under-cursor.ts` | Extracts issue # from text, opens actions  |
 | `newIssue`                          | `new-issue.ts`                           | Opens browser to Redmine new issue form    |
+| `setApiKey`                         | `set-api-key.ts`                         | Securely stores API key in VS Code Secrets |
 | `changeDefaultServer`               | (inline in extension.ts)                 | Switches active server in trees            |
 | `refreshIssues`                     | (inline)                                 | Clears cache, refreshes trees              |
 | `toggleTreeView` / `toggleListView` | (inline)                                 | Toggle project view mode                   |
@@ -256,10 +262,11 @@ getChildren(project) → Subprojects + issues for that project
 | Setting                      | Type    | Description                                                   |
 | ---------------------------- | ------- | ------------------------------------------------------------- |
 | `redmine.url`                | string  | Server URL (e.g., `https://redmine.example.com:8443/redmine`) |
-| `redmine.apiKey`             | string  | API key from `/my/account` page                               |
 | `redmine.rejectUnauthorized` | boolean | SSL cert validation (for self-signed certs)                   |
 | `redmine.identifier`         | string  | Default project identifier for new issues                     |
 | `redmine.additionalHeaders`  | object  | Custom HTTP headers                                           |
+
+**API Key Storage** (v3.0+): Stored securely via VS Code Secrets API (platform-native encryption), not in settings. Use `Redmine: Set API Key` command.
 
 **Workspace Support**: All settings scoped to `resource` (multi-root workspace).
 
@@ -432,15 +439,17 @@ Migration handled in `src/extension.ts:96-129`.
 
 ## Testing Strategy
 
-**Current State**: No automated tests.
+**Current State** (v3.0+): Comprehensive test suite with 60%+ coverage.
 
-**Recommended**:
+**Test Framework**: Vitest with MSW (Mock Service Worker) for HTTP mocking.
 
-- Unit tests for `RedmineServer` methods (mock HTTP)
-- Integration tests for commands (mock VS Code API)
-- E2E tests with test Redmine instance
+**Coverage**:
+- Unit tests for `RedmineServer` methods (HTTP mocked via MSW)
+- Unit tests for commands (`setApiKey`, domain utilities)
+- Unit tests for utilities (`RedmineSecretManager`, error handling)
+- 46+ tests, ~75% coverage, <2s runtime
 
-**Test Framework**: Mocha (already in devDeps as `@types/mocha`).
+**Run Tests**: `npm test` (includes coverage report)
 
 ## Future Extension Points
 
@@ -480,11 +489,16 @@ Migration handled in `src/extension.ts:96-129`.
 
 ## Security Considerations
 
-- API keys stored in VS Code settings (encrypted at rest by VS Code)
-- HTTPS recommended (HTTP supported for local dev)
-- `rejectUnauthorized` option for self-signed certs (use cautiously)
-- No credential storage in extension code
-- All API calls authenticated via header
+- **API Keys** (v3.0+): Stored via VS Code Secrets API with platform-native encryption
+  - Windows: Credential Manager
+  - macOS: Keychain
+  - Linux: libsecret/gnome-keyring
+  - Never synced across devices
+  - Managed via `RedmineSecretManager` utility
+- **Server URLs**: Stored in workspace settings (may sync via Settings Sync)
+- **HTTPS**: Recommended (HTTP supported for local dev)
+- **Self-signed Certs**: `rejectUnauthorized` option (use cautiously)
+- **No credential storage in extension code**: All API calls authenticated via header
 
 ## Multi-Workspace Support
 

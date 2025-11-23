@@ -2,6 +2,8 @@
 
 Comprehensive reference for Redmine REST API, VS Code Extension API, and Positron IDE APIs used in this extension.
 
+> **Note**: Line number references in this document may be outdated due to code evolution. Verify locations in current source.
+
 ## Table of Contents
 
 1. [Redmine REST API](#redmine-rest-api)
@@ -588,6 +590,7 @@ context.subscriptions.push(
 
 **Current Commands Registered**:
 
+- `redmine.setApiKey` (v3.0+)
 - `redmine.listOpenIssuesAssignedToMe`
 - `redmine.openActionsForIssue`
 - `redmine.openActionsForIssueUnderCursor`
@@ -1112,7 +1115,7 @@ vscode.scm.createSourceControlResourceGroup(...);
 
 Positron is a data science IDE based on VS Code, built by Posit (formerly RStudio). Extends VS Code with data science features.
 
-**Compatibility**: Extension targets both VS Code `^1.74.0` and Positron `^2025.06.0`.
+**Compatibility**: Extension targets both VS Code `^1.106.0` and Positron `^2025.06.0`.
 
 **Key Difference**: Positron adds data-science-specific APIs while maintaining full VS Code API compatibility.
 
@@ -1120,7 +1123,7 @@ Positron is a data science IDE based on VS Code, built by Posit (formerly RStudi
 
 ```json
 "engines": {
-  "vscode": "^1.74.0",
+  "vscode": "^1.106.0",
   "positron": "^2025.06.0"
 }
 ```
@@ -1237,12 +1240,20 @@ if (isPositron) {
 ### API Key Security
 
 ```typescript
-// ✅ Good: Use VS Code secure storage
-await context.secrets.store("redmine.apiKey", apiKey);
+// ✅ Current (v3.0+): RedmineSecretManager wrapper for VS Code Secrets API
+const secretManager = new RedmineSecretManager(context.secrets);
+await secretManager.setApiKey(workspaceUri, apiKey);
+const key = await secretManager.getApiKey(workspaceUri);
 
-// ❌ Current: Plain settings (encrypted by VS Code but visible)
+// ❌ Deprecated (<v3.0): Plain settings (insecure, synced)
 config.get("redmine.apiKey");
 ```
+
+**RedmineSecretManager** (`src/utilities/secret-manager.ts`):
+- Wraps VS Code Secrets API with workspace-scoped keys
+- Platform-native encryption (Credential Manager/Keychain/libsecret)
+- Never synced across devices
+- Provides `setApiKey()`, `getApiKey()`, `deleteApiKey()`, `onSecretChanged()` event
 
 ### Error Handling
 

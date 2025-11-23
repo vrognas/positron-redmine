@@ -2,10 +2,10 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 3.0.x   | :white_check_mark: |
-| < 3.0   | :x:                |
+| Version | Supported  |
+| ------- | ---------- |
+| 3.0.x   | ✓ Yes      |
+| < 3.0   | ✗ No       |
 
 **Recommendation**: Use latest 3.x release for security fixes.
 
@@ -13,7 +13,9 @@
 
 **DO NOT** open public issues for security vulnerabilities.
 
-**Email**: github@rozpuszczalny.com
+**Preferred**: Use [GitHub Security Advisory](https://github.com/vrognas/positron-redmine/security/advisories/new) for private reporting.
+
+**Alternative**: Email maintainers through GitHub profile.
 
 Include:
 - Extension version
@@ -37,7 +39,7 @@ Include:
 ### Migrate to v3.0
 Run: `Redmine: Set API Key` command to migrate from plaintext storage.
 
-See [Migration Guide](./MIGRATION_GUIDE.md).
+See [Migration Guide](../docs/MIGRATION_GUIDE.md).
 
 ### Self-Signed Certificates
 `redmine.rejectUnauthorized: false` disables TLS validation.

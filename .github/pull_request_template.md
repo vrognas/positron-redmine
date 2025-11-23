@@ -14,6 +14,7 @@
 - [ ] Tests added/updated (if applicable)
 - [ ] All tests pass (`npm test`)
 - [ ] CHANGELOG.md updated under `[Unreleased]`
+- [ ] Version bumped per semver (if releasing)
 - [ ] No breaking changes (or documented in CHANGELOG)
 - [ ] Security implications considered
 

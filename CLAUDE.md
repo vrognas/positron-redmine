@@ -22,5 +22,4 @@
 - Commit often, with small and focused commits.
 - Write concise commit messages that clearly describe the changes made.
 - For simple queries, use under five tool calls, but for more complex queries you can use up to 15 tool calls.
-- STOP if you find anything unexpected
-- In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision.
+- STOP and ask user if you find unexpected issues during implementation (breaking changes, missing dependencies, test failures).
