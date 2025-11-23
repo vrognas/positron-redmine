@@ -67,13 +67,29 @@ export class ApiLogger {
     if (queryIndex === -1) return path;
 
     const basePath = path.substring(0, queryIndex);
-    const query = path.substring(queryIndex);
+    const query = path.substring(queryIndex + 1);
 
-    if (query.length > 100) {
-      return basePath + query.substring(0, 100) + "...";
+    const redactedQuery = this.redactQueryParams(query);
+
+    if (redactedQuery.length > 100) {
+      return basePath + "?" + redactedQuery.substring(0, 100) + "...";
     }
 
-    return path;
+    return basePath + "?" + redactedQuery;
+  }
+
+  private redactQueryParams(query: string): string {
+    const params = new URLSearchParams(query);
+    const sensitiveFields = ["password", "api_key", "apikey", "token", "secret", "auth", "authorization", "key"];
+
+    for (const key of params.keys()) {
+      const lowerKey = key.toLowerCase();
+      if (sensitiveFields.some(field => lowerKey.includes(field))) {
+        params.set(key, "***");
+      }
+    }
+
+    return params.toString();
   }
 
   private truncateString(str: string, maxLength: number): string {
