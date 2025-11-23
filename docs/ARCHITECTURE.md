@@ -416,6 +416,34 @@ Extension detects old config (`redmine.serverUrl`) and shows migration guide via
 
 Migration handled in `src/extension.ts:96-129`.
 
+## Output Channel Logging
+
+**Purpose**: Debug API interactions via VS Code output channel.
+
+**Architecture**: Decorator pattern wraps `RedmineServer.doRequest()`.
+
+**Components**:
+- `ApiLogger` (`src/utilities/api-logger.ts`): Formats log entries
+- `LoggingRedmineServer` (`src/redmine/logging-redmine-server.ts`): Decorator extending `RedmineServer`
+- Output channel: "Redmine API" (created in `extension.ts:26`)
+
+**Configuration**: `redmine.logging.enabled` (boolean, default: false)
+
+**Log Format**: `[HH:MM:SS.mmm] [counter] METHOD path → status (duration)`
+
+**Example**:
+```
+[14:23:45.123] [1] GET /issues/123.json
+[14:23:45.265] [1] → 200 (142ms)
+```
+
+**Commands**:
+- `redmine.showApiOutput` - Reveal output channel
+- `redmine.clearApiOutput` - Clear logs
+- `redmine.toggleApiLogging` - Enable/disable at runtime
+
+**Implementation**: When logging enabled, `createServer()` returns `LoggingRedmineServer` instead of `RedmineServer` (extension.ts:30-44). Zero overhead when disabled.
+
 ## Dependencies
 
 **Runtime**:

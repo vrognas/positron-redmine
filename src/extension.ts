@@ -1,5 +1,9 @@
 import * as vscode from "vscode";
-import { RedmineServer } from "./redmine/redmine-server";
+import {
+  RedmineServer,
+  RedmineServerConnectionOptions,
+} from "./redmine/redmine-server";
+import { LoggingRedmineServer } from "./redmine/logging-redmine-server";
 import { RedmineProject } from "./redmine/redmine-project";
 import openActionsForIssue from "./commands/open-actions-for-issue";
 import openActionsForIssueUnderCursor from "./commands/open-actions-for-issue-under-cursor";
@@ -19,6 +23,25 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   const secretManager = new RedmineSecretManager(context);
+  const outputChannel = vscode.window.createOutputChannel("Redmine API");
+
+  context.subscriptions.push(outputChannel);
+
+  const createServer = (
+    options: RedmineServerConnectionOptions
+  ): RedmineServer => {
+    const loggingEnabled =
+      vscode.workspace.getConfiguration("redmine").get<boolean>("logging.enabled") ||
+      false;
+
+    if (loggingEnabled) {
+      return new LoggingRedmineServer(options, outputChannel, {
+        enabled: true,
+      });
+    }
+
+    return new RedmineServer(options);
+  };
 
   const myIssuesTree = new MyIssuesTree();
   const projectsTree = new ProjectsTree();
@@ -65,7 +88,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // If configured, initialize server for trees
     if (isConfigured) {
       try {
-        const server = new RedmineServer({
+        const server = createServer({
           address: config.get<string>("url")!,
           key: (await secretManager.getApiKey(folder.uri))!,
           additionalHeaders: config.get("additionalHeaders"),
@@ -370,7 +393,7 @@ export function activate(context: vscode.ExtensionContext): void {
       return Promise.resolve({ props: undefined, args: [] });
     }
 
-    const redmineServer = new RedmineServer({
+    const redmineServer = createServer({
       address: config.url,
       key: apiKey,
       additionalHeaders: config.additionalHeaders,
@@ -491,6 +514,27 @@ export function activate(context: vscode.ExtensionContext): void {
         ProjectsViewStyle.TREE
       );
       projectsTree.setViewStyle(ProjectsViewStyle.TREE);
+    }),
+    vscode.commands.registerCommand("redmine.showApiOutput", () => {
+      outputChannel.show();
+    }),
+    vscode.commands.registerCommand("redmine.clearApiOutput", () => {
+      outputChannel.clear();
+      vscode.window.showInformationMessage("Redmine API output cleared");
+    }),
+    vscode.commands.registerCommand("redmine.toggleApiLogging", async () => {
+      const config = vscode.workspace.getConfiguration("redmine");
+      const currentValue = config.get<boolean>("logging.enabled") || false;
+      await config.update(
+        "logging.enabled",
+        !currentValue,
+        vscode.ConfigurationTarget.Global
+      );
+      vscode.window.showInformationMessage(
+        `Redmine API logging ${!currentValue ? "enabled" : "disabled"}`
+      );
+      // Refresh trees to use new server instances
+      await updateConfiguredContext();
     })
   );
 }

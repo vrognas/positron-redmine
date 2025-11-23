@@ -4,6 +4,21 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ## [Unreleased]
 
+## [3.0.5] - 2025-11-23
+
+### Added
+
+- Output channel for API call logging
+- `redmine.logging.enabled` config (default: false)
+- Commands: showApiOutput, clearApiOutput, toggleApiLogging
+- ApiLogger utility: minimal format with timestamp+counter
+- LoggingRedmineServer: decorator pattern wrapping RedmineServer.doRequest()
+
+### Changed
+
+- Log format: `[HH:MM:SS.mmm] [counter] METHOD path → status (duration)`
+- Zero overhead when logging disabled
+
 ## [3.0.4] - 2025-11-23
 
 ### Fixed
