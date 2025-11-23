@@ -4,6 +4,30 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ## [Unreleased]
 
+## [3.0.5] - 2025-11-23
+
+### Added
+
+- Output channel for API call logging
+- `redmine.logging.enabled` config (default: true)
+- Commands: showApiOutput, clearApiOutput, toggleApiLogging
+- ApiLogger utility: timestamp+counter+duration format
+- LoggingRedmineServer: decorator pattern wrapping RedmineServer
+- Protected hooks in RedmineServer: onResponseSuccess, onResponseError
+- Request body logging (200 char truncation, redacted)
+- Response size tracking in bytes
+- Query parameter truncation (>100 chars)
+- Binary content detection (image/*, application/pdf)
+- Error response body logging
+- Sensitive data redaction (password, api_key, token, secret)
+- Redaction utility module
+
+### Changed
+
+- Log format: `[HH:MM:SS.mmm] [counter] METHOD path → status (duration) sizeB [binary]`
+- Zero overhead when logging disabled
+- All sensitive fields redacted in request/response logs
+
 ## [3.0.4] - 2025-11-23
 
 ### Fixed

@@ -2,7 +2,7 @@
   "name": "positron-redmine",
   "displayName": "Redmine for Positron",
   "description": "Redmine project management integration for Positron IDE and VS Code",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "publisher": "vrognas",
   "license": "MIT",
   "icon": "logo.png",
@@ -64,6 +64,18 @@
         "command": "redmine.toggleListView",
         "title": "Toggle Project View: List",
         "icon": "$(list-flat)"
+      },
+      {
+        "command": "redmine.showApiOutput",
+        "title": "Redmine: Show API Output"
+      },
+      {
+        "command": "redmine.clearApiOutput",
+        "title": "Redmine: Clear API Output"
+      },
+      {
+        "command": "redmine.toggleApiLogging",
+        "title": "Redmine: Toggle API Logging"
       }
     ],
     "views": {
@@ -191,6 +203,12 @@
           "type": "object",
           "description": "Additional headers",
           "default": {},
+          "scope": "machine"
+        },
+        "redmine.logging.enabled": {
+          "type": "boolean",
+          "description": "Enable API request/response logging to output channel",
+          "default": true,
           "scope": "machine"
         }
       }
