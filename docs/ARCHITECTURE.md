@@ -427,7 +427,7 @@ Migration handled in `src/extension.ts:96-129`.
 - `LoggingRedmineServer` (`src/redmine/logging-redmine-server.ts`): Decorator extending `RedmineServer`
 - Output channel: "Redmine API" (created in `extension.ts:26`)
 
-**Configuration**: `redmine.logging.enabled` (boolean, default: false)
+**Configuration**: `redmine.logging.enabled` (boolean, default: true)
 
 **Log Format**: `[HH:MM:SS.mmm] [counter] METHOD path → status (duration)`
 

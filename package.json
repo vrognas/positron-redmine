@@ -208,7 +208,7 @@
         "redmine.logging.enabled": {
           "type": "boolean",
           "description": "Enable API request/response logging to output channel",
-          "default": false,
+          "default": true,
           "scope": "machine"
         }
       }

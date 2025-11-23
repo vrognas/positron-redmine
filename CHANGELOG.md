@@ -9,7 +9,7 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 ### Added
 
 - Output channel for API call logging
-- `redmine.logging.enabled` config (default: false)
+- `redmine.logging.enabled` config (default: true)
 - Commands: showApiOutput, clearApiOutput, toggleApiLogging
 - ApiLogger utility: minimal format with timestamp+counter
 - LoggingRedmineServer: decorator pattern wrapping RedmineServer.doRequest()
