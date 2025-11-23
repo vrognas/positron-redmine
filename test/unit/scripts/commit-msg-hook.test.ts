@@ -17,7 +17,7 @@ describe("commit-msg hook", () => {
 
   it("should pass for valid subject (50 chars)", () => {
     writeFileSync(TEST_MSG_FILE, "feat: add commit message validation hook now");
-    const result = execSync(`${HOOK_PATH} ${TEST_MSG_FILE}`, {
+    const result = execSync(`bash ${HOOK_PATH} ${TEST_MSG_FILE}`, {
       encoding: "utf8",
     });
     expect(result).toBe("");
@@ -28,7 +28,7 @@ describe("commit-msg hook", () => {
       TEST_MSG_FILE,
       "feat: add commit message validation hook right now!",
     );
-    expect(() => execSync(`${HOOK_PATH} ${TEST_MSG_FILE}`)).toThrow();
+    expect(() => execSync(`bash ${HOOK_PATH} ${TEST_MSG_FILE}`)).toThrow();
   });
 
   it("should pass for subject + blank line + body (72 chars)", () => {
@@ -36,7 +36,7 @@ describe("commit-msg hook", () => {
 
 This is a body line that is exactly seventy-two characters in length.`;
     writeFileSync(TEST_MSG_FILE, msg);
-    const result = execSync(`${HOOK_PATH} ${TEST_MSG_FILE}`, {
+    const result = execSync(`bash ${HOOK_PATH} ${TEST_MSG_FILE}`, {
       encoding: "utf8",
     });
     expect(result).toBe("");
@@ -47,14 +47,14 @@ This is a body line that is exactly seventy-two characters in length.`;
 
 This is a body line that exceeds the maximum allowed length of seventy-two.`;
     writeFileSync(TEST_MSG_FILE, msg);
-    expect(() => execSync(`${HOOK_PATH} ${TEST_MSG_FILE}`)).toThrow();
+    expect(() => execSync(`bash ${HOOK_PATH} ${TEST_MSG_FILE}`)).toThrow();
   });
 
   it("should fail if no blank line between subject and body", () => {
     const msg = `feat: add hook
 Body without blank line`;
     writeFileSync(TEST_MSG_FILE, msg);
-    expect(() => execSync(`${HOOK_PATH} ${TEST_MSG_FILE}`)).toThrow();
+    expect(() => execSync(`bash ${HOOK_PATH} ${TEST_MSG_FILE}`)).toThrow();
   });
 
   it("should allow merge commits", () => {
@@ -62,7 +62,7 @@ Body without blank line`;
 
 Some body text`;
     writeFileSync(TEST_MSG_FILE, msg);
-    const result = execSync(`${HOOK_PATH} ${TEST_MSG_FILE}`, {
+    const result = execSync(`bash ${HOOK_PATH} ${TEST_MSG_FILE}`, {
       encoding: "utf8",
     });
     expect(result).toBe("");
@@ -73,7 +73,7 @@ Some body text`;
 
 This reverts commit abc123.`;
     writeFileSync(TEST_MSG_FILE, msg);
-    const result = execSync(`${HOOK_PATH} ${TEST_MSG_FILE}`, {
+    const result = execSync(`bash ${HOOK_PATH} ${TEST_MSG_FILE}`, {
       encoding: "utf8",
     });
     expect(result).toBe("");
