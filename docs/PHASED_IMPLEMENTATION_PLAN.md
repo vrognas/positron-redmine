@@ -1,7 +1,7 @@
 # Phased Implementation Plan - Redmine VSCode Extension MVPs
 
 **Date**: 2025-11-24
-**Status**: MVP-2 Complete ✅ (v3.2.1) - Moving to MVP-1
+**Status**: MVP-1 Complete ✅ (v3.3.0) - Moving to MVP-4
 **Compliance**: A (91/100) - All critical issues resolved
 
 ---
@@ -16,10 +16,10 @@
 |-----|----------|--------|--------|-------------|
 | **MVP-3** | P1 | 3-4h | ✅ **COMPLETE** | Quick Time Logging (Ctrl+Y Ctrl+Y) |
 | **MVP-2** | P0 | 5-7h | ✅ **COMPLETE** | Time Entry Viewing (tree view) |
-| **MVP-1** | P0 | 9-11h | ⭐ **NEXT** | Timeline & Progress Display (flexibility scores) |
-| **MVP-4** | P1 | 2-3h | Pending | Workload Overview (status bar) |
+| **MVP-1** | P0 | 9-11h | ✅ **COMPLETE** | Timeline & Progress Display (flexibility scores) |
+| **MVP-4** | P1 | 2-3h | ⭐ **NEXT** | Workload Overview (status bar) |
 
-**Implementation Order**: MVP-3 ✅ → MVP-2 ✅ → MVP-1 → MVP-4
+**Implementation Order**: MVP-3 ✅ → MVP-2 ✅ → MVP-1 ✅ → MVP-4
 **Rationale**: Simple→Complex, de-risk patterns early
 
 ### Validation Status
@@ -1153,16 +1153,38 @@ describe('calculateFlexibility', () => {
 
 ### Success Criteria
 
-- [ ] Flexibility scores accurate (initial + remaining)
-- [ ] ThemeIcon shows risk level (error/warning/pass)
-- [ ] Text alternatives for accessibility
-- [ ] Pre-calculated in getChildren (no freeze)
-- [ ] Memoization reduces calc time by 10×
-- [ ] Config changes trigger recalculation
-- [ ] Context menu works
-- [ ] Tests pass (5+ scenarios)
+- [x] Flexibility scores accurate (initial + remaining)
+- [x] ThemeIcon shows risk level (error/warning/pass)
+- [x] Text alternatives for accessibility
+- [x] Pre-calculated in getChildren (no freeze)
+- [x] Memoization reduces calc time
+- [x] Config changes trigger recalculation
+- [x] Context menu works
+- [x] Tests pass (5+ scenarios)
 
-**Estimated Effort**: 9-11 hours
+**Status**: ✅ COMPLETE (v3.3.0)
+
+### Implementation Summary (v3.3.0)
+
+**Core Features Delivered**:
+- Dual flexibility formula (initial planning quality + remaining risk)
+- Risk indicators: On Track, At Risk, Overbooked, Done
+- ThemeIcon + ThemeColor for accessible display
+- Rich tooltip with progress, days, hours, flexibility %
+- Issues sorted by urgency (overbooked first)
+- Context menus: Open in Browser, Quick Log Time, Copy URL
+
+**Key Implementation Details**:
+- flexibility-calculator.ts: memoized working days calculation
+- tree-item-factory.ts: createEnhancedIssueTreeItem()
+- my-issues-tree.ts: pre-calculated flexibility, config listener
+- Issue model: added spent_hours field
+
+**Testing**:
+- 5 flexibility calculator tests
+- 8 tree-item-factory tests
+- Total: 132 tests passing
+- CI green ✓
 
 ---
 

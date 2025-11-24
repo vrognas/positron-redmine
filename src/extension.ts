@@ -584,6 +584,29 @@ export function activate(context: vscode.ExtensionContext): void {
 
     await vscode.env.openExternal(vscode.Uri.parse(`${props.server.options.address}/issues/${issueId}`));
   });
+
+  // Open issue in browser (context menu for my-issues tree)
+  registerCommand("openIssueInBrowser", async (props: ActionProperties, ...args: unknown[]) => {
+    // Tree item passes the Issue object
+    const issue = args[0] as { id: number } | undefined;
+    if (!issue?.id) {
+      vscode.window.showErrorMessage('Could not determine issue ID');
+      return;
+    }
+    await vscode.env.openExternal(vscode.Uri.parse(`${props.server.options.address}/issues/${issue.id}`));
+  });
+
+  // Copy issue URL to clipboard (context menu for my-issues tree)
+  registerCommand("copyIssueUrl", async (props: ActionProperties, ...args: unknown[]) => {
+    const issue = args[0] as { id: number } | undefined;
+    if (!issue?.id) {
+      vscode.window.showErrorMessage('Could not determine issue ID');
+      return;
+    }
+    const url = `${props.server.options.address}/issues/${issue.id}`;
+    await vscode.env.clipboard.writeText(url);
+    vscode.window.showInformationMessage(`Copied URL for issue #${issue.id}`);
+  });
   context.subscriptions.push(
     vscode.commands.registerCommand("redmine.refreshIssues", () => {
       projectsTree.clearProjects();

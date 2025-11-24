@@ -2,7 +2,7 @@
   "name": "positron-redmine",
   "displayName": "Redmine for Positron",
   "description": "Redmine project management integration for Positron IDE and VS Code",
-  "version": "3.2.1",
+  "version": "3.3.0",
   "publisher": "vrognas",
   "license": "MIT",
   "icon": "logo.png",
@@ -92,6 +92,16 @@
       {
         "command": "redmine.openTimeEntryInBrowser",
         "title": "Open in Browser"
+      },
+      {
+        "command": "redmine.openIssueInBrowser",
+        "title": "Open in Browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "redmine.copyIssueUrl",
+        "title": "Copy Issue URL",
+        "icon": "$(copy)"
       }
     ],
     "keybindings": [
@@ -170,6 +180,14 @@
         {
           "command": "redmine.openTimeEntryInBrowser",
           "when": "false"
+        },
+        {
+          "command": "redmine.openIssueInBrowser",
+          "when": "false"
+        },
+        {
+          "command": "redmine.copyIssueUrl",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -225,6 +243,21 @@
         {
           "command": "redmine.openTimeEntryInBrowser",
           "when": "view == 'redmine-explorer-my-time-entries' && viewItem == 'time-entry'"
+        },
+        {
+          "command": "redmine.openIssueInBrowser",
+          "when": "view == 'redmine-explorer-my-issues' && viewItem =~ /^issue/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "redmine.quickLogTime",
+          "when": "view == 'redmine-explorer-my-issues' && viewItem == 'issue-active'",
+          "group": "redmine@1"
+        },
+        {
+          "command": "redmine.copyIssueUrl",
+          "when": "view == 'redmine-explorer-my-issues' && viewItem =~ /^issue/",
+          "group": "9_cutcopypaste@1"
         }
       ]
     },
