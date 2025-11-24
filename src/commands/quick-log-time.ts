@@ -13,6 +13,39 @@ function isRecent(date: Date): boolean {
   return Date.now() - new Date(date).getTime() < 24 * 60 * 60 * 1000; // 24h
 }
 
+function parseTimeInput(input: string): number | null {
+  const trimmed = input.trim();
+
+  // Format: "1.75" or "1,75" (decimal hours)
+  const decimalMatch = trimmed.match(/^(\d+(?:[.,]\d+)?)$/);
+  if (decimalMatch) {
+    return parseFloat(decimalMatch[1].replace(",", "."));
+  }
+
+  // Format: "1:45" (hours:minutes)
+  const colonMatch = trimmed.match(/^(\d+):(\d+)$/);
+  if (colonMatch) {
+    const hours = parseInt(colonMatch[1], 10);
+    const minutes = parseInt(colonMatch[2], 10);
+    if (minutes >= 60) return null; // Invalid minutes
+    return hours + minutes / 60;
+  }
+
+  // Format: "1h 45min" or "1 h 45 min" (with units and optional spaces)
+  const unitMatch = trimmed.match(
+    /^(?:(\d+)\s*h(?:our)?s?)?\s*(?:(\d+)\s*m(?:in(?:ute)?s?)?)?$/i
+  );
+  if (unitMatch) {
+    const hours = unitMatch[1] ? parseInt(unitMatch[1], 10) : 0;
+    const minutes = unitMatch[2] ? parseInt(unitMatch[2], 10) : 0;
+    if (hours === 0 && minutes === 0) return null; // No input
+    if (minutes >= 60) return null; // Invalid minutes
+    return hours + minutes / 60;
+  }
+
+  return null; // Invalid format
+}
+
 export async function quickLogTime(
   props: ActionProperties,
   context: vscode.ExtensionContext
@@ -22,7 +55,12 @@ export async function quickLogTime(
     const recent = context.globalState.get<RecentTimeLog>("lastTimeLog");
 
     // 2. Prompt: recent issue or pick new?
-    let selection: { issueId: number; activityId: number; issueSubject: string };
+    let selection: {
+      issueId: number;
+      activityId: number;
+      activityName: string;
+      issueSubject: string;
+    };
 
     if (recent && isRecent(recent.lastLogged)) {
       const choice = await vscode.window.showQuickPick(
@@ -42,6 +80,7 @@ export async function quickLogTime(
         selection = {
           issueId: recent.issueId,
           activityId: recent.lastActivityId,
+          activityName: recent.lastActivityName,
           issueSubject: recent.issueSubject,
         };
       } else {
@@ -56,25 +95,28 @@ export async function quickLogTime(
     }
 
     // 3. Input hours
-    const hours = await vscode.window.showInputBox({
-      prompt: `Hours worked on #${selection.issueId}`,
-      placeHolder: "e.g., 2.5",
+    const hoursInput = await vscode.window.showInputBox({
+      prompt: `Log time to #${selection.issueId} (${selection.activityName})`,
+      placeHolder: "e.g., 2.5, 1:45, 1h 45min",
       validateInput: (value: string) => {
-        const num = parseFloat(value);
-        if (isNaN(num) || num <= 0 || num > 24) {
-          return "Must be 0.1-24 hours";
+        const hours = parseTimeInput(value);
+        if (hours === null || hours < 0.1 || hours > 24) {
+          return "Must be 0.1-24 hours (e.g., 2.5, 1:45, 1h 45min)";
         }
         return null;
       },
     });
 
-    if (!hours) return; // User cancelled
+    if (!hoursInput) return; // User cancelled
+
+    const hours = parseTimeInput(hoursInput)!; // Already validated
+    const hoursStr = hours.toString();
 
     // 4. Post time entry
     await props.server.addTimeEntry(
       selection.issueId,
       selection.activityId,
-      hours,
+      hoursStr,
       "" // No comment for quick logging
     );
 
@@ -83,7 +125,7 @@ export async function quickLogTime(
       issueId: selection.issueId,
       issueSubject: selection.issueSubject,
       lastActivityId: selection.activityId,
-      lastActivityName: "", // Not critical for cache
+      lastActivityName: selection.activityName,
       lastLogged: new Date(),
     });
 
@@ -91,7 +133,7 @@ export async function quickLogTime(
     const statusBar = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left
     );
-    statusBar.text = `$(check) Logged ${hours}h to #${selection.issueId}`;
+    statusBar.text = `$(check) Logged ${hours.toFixed(2).replace(/\.?0+$/, "")}h to #${selection.issueId}`;
     statusBar.show();
     setTimeout(() => {
       statusBar.hide();
@@ -108,7 +150,13 @@ async function pickIssueAndActivity(
   props: ActionProperties,
   context: vscode.ExtensionContext
 ): Promise<
-  { issueId: number; activityId: number; issueSubject: string } | undefined
+  | {
+      issueId: number;
+      activityId: number;
+      activityName: string;
+      issueSubject: string;
+    }
+  | undefined
 > {
   // Get recent issue IDs from cache (LRU 10)
   const recentIds = context.globalState.get<number[]>("recentIssueIds", []);
@@ -170,6 +218,7 @@ async function pickIssueAndActivity(
   return {
     issueId: picked.issue.id,
     activityId: activity.activity.id,
+    activityName: activity.activity.name,
     issueSubject: picked.issue.subject,
   };
 }

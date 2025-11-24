@@ -77,7 +77,7 @@ describe("quickLogTime", () => {
     );
   });
 
-  it("validates hours input (0.1-24 range)", async () => {
+  it("validates hours input (0.1-24 range, multiple formats)", async () => {
     mockContext.globalState.get = vi.fn().mockReturnValue(undefined);
 
     const testIssue = {
@@ -107,11 +107,27 @@ describe("quickLogTime", () => {
     const inputValidator = showInputBoxSpy.mock.calls[0][0]
       .validateInput as (value: string) => string | null;
 
-    expect(inputValidator("0")).toBe("Must be 0.1-24 hours");
-    expect(inputValidator("-5")).toBe("Must be 0.1-24 hours");
-    expect(inputValidator("25")).toBe("Must be 0.1-24 hours");
-    expect(inputValidator("abc")).toBe("Must be 0.1-24 hours");
+    // Invalid: out of range or bad format
+    expect(inputValidator("0")).toContain("Must be 0.1-24 hours");
+    expect(inputValidator("-5")).toContain("Must be 0.1-24 hours");
+    expect(inputValidator("25")).toContain("Must be 0.1-24 hours");
+    expect(inputValidator("abc")).toContain("Must be 0.1-24 hours");
+    expect(inputValidator("1:75")).toContain("Must be 0.1-24 hours"); // Invalid minutes
+
+    // Valid: decimal format
     expect(inputValidator("2.5")).toBeNull();
+    expect(inputValidator("1,5")).toBeNull(); // European format
+
+    // Valid: HH:MM format
+    expect(inputValidator("1:45")).toBeNull(); // 1.75 hours
+    expect(inputValidator("0:30")).toBeNull(); // 0.5 hours
+
+    // Valid: text with units
+    expect(inputValidator("1h 45min")).toBeNull();
+    expect(inputValidator("1h45min")).toBeNull();
+    expect(inputValidator("1 h 45 min")).toBeNull();
+    expect(inputValidator("45min")).toBeNull(); // 0.75 hours
+    expect(inputValidator("2h")).toBeNull(); // 2 hours
   });
 
   it("calls API and updates cache after logging", async () => {
