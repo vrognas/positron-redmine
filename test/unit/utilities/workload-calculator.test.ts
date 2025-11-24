@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  calculateWorkload,
-  WorkloadSummary,
-} from "../../../src/utilities/workload-calculator";
+import { calculateWorkload } from "../../../src/utilities/workload-calculator";
 import { WeeklySchedule } from "../../../src/utilities/flexibility-calculator";
 import { Issue } from "../../../src/redmine/models/issue";
 

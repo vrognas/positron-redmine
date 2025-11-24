@@ -42,7 +42,7 @@ export function calculateWorkload(
   today: Date = new Date()
 ): WorkloadSummary {
   // Filter issues with estimates
-  const withEstimates = issues.filter((i) => i.estimated_hours != null);
+  const withEstimates = issues.filter((i) => i.estimated_hours !== null);
 
   // Total estimated and spent
   const totalEstimated = withEstimates.reduce(
