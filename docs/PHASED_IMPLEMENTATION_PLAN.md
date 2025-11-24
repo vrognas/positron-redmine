@@ -1,7 +1,7 @@
 # Phased Implementation Plan - Redmine VSCode Extension MVPs
 
 **Date**: 2025-11-24
-**Status**: MVP-3 Complete ✅ - Moving to MVP-2
+**Status**: MVP-2 Complete ✅ - Moving to MVP-1
 **Compliance**: A (91/100) - All critical issues resolved
 
 ---
@@ -15,11 +15,11 @@
 | MVP | Priority | Effort | Status | Description |
 |-----|----------|--------|--------|-------------|
 | **MVP-3** | P1 | 3-4h | ✅ **COMPLETE** | Quick Time Logging (Ctrl+Y Ctrl+Y) |
-| **MVP-2** | P0 | 5-7h | ⭐ **NEXT** | Time Entry Viewing (tree view) |
-| **MVP-1** | P0 | 9-11h | Pending | Timeline & Progress Display (flexibility scores) |
+| **MVP-2** | P0 | 5-7h | ✅ **COMPLETE** | Time Entry Viewing (tree view) |
+| **MVP-1** | P0 | 9-11h | ⭐ **NEXT** | Timeline & Progress Display (flexibility scores) |
 | **MVP-4** | P1 | 2-3h | Pending | Workload Overview (status bar) |
 
-**Implementation Order**: MVP-3 ✅ → MVP-2 → MVP-1 → MVP-4
+**Implementation Order**: MVP-3 ✅ → MVP-2 ✅ → MVP-1 → MVP-4
 **Rationale**: Simple→Complex, de-risk patterns early
 
 ### Validation Status
@@ -801,15 +801,15 @@ describe('MyTimeEntriesTreeDataProvider', () => {
 
 ### Success Criteria
 
-- [ ] Tree view shows Today/Week/Month groups
-- [ ] Total hours shown in group descriptions
-- [ ] Loading state appears during fetch
-- [ ] No double-fetching (cached entries)
-- [ ] Refresh command works
-- [ ] Context menu opens time entry in browser
-- [ ] Tests pass (3 scenarios)
+- [x] Tree view shows Today/Week/Month groups
+- [x] Total hours shown in group descriptions
+- [x] Loading state appears during fetch
+- [x] No double-fetching (cached entries)
+- [x] Refresh command works
+- [x] Context menu opens time entry in browser
+- [x] Tests pass (7 scenarios)
 
-**Estimated Effort**: 5-7 hours
+**Status**: ✅ COMPLETE (4h actual)
 
 ---
 
