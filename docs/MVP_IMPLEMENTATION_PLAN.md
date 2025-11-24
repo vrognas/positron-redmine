@@ -164,11 +164,12 @@ context.globalState.update('lastTimeLog', { issueId, lastLogged: new Date() });
 #### MVP-4: Status Bar Item (Not Tree View or Webview)
 ```typescript
 // Status bar (always visible, minimal code)
+// ⚠️ UX COMPLIANCE: Text-only, no icons/emoji (see implementation section for full pattern)
 const statusBar = vscode.window.createStatusBarItem(
   vscode.StatusBarAlignment.Right,
   100
 );
-statusBar.text = "$(pulse) 25h left, +7h 🟢";
+statusBar.text = "25h left, +7h buffer";  // Text only - accessible
 statusBar.tooltip = new vscode.MarkdownString(`
 **Workload Overview**
 
@@ -176,12 +177,12 @@ Total estimated: 48h
 Total spent: 23h
 Remaining work: 25h
 Available this week: 32h
-Capacity: +7h buffer 🟢
+Capacity: +7h buffer On Track
 
 **Top 3 Urgent:**
-- #123: DUE TODAY, 8h left 🔴
-- #456: 2d left, 5h left 🟡
-- #789: 7d left, 12h left 🟢
+- #123: DUE TODAY, 8h left (Overdue)
+- #456: 2d left, 5h left (Due Soon)
+- #789: 7d left, 12h left (Scheduled)
 `);
 statusBar.command = "redmine.showWorkloadDetails";
 statusBar.show();
@@ -255,6 +256,38 @@ vscode.workspace.onDidChangeConfiguration(e => {
 
 ---
 
+### Settings Enhancement Pattern (UX Compliance)
+
+**⚠️ UX COMPLIANCE**: Improve settings discoverability and sync behavior
+
+**Enhancements**:
+```json
+"redmine.workinghours.hoursperday": {
+  "type": "number",
+  "default": 8,
+  "minimum": 1,
+  "maximum": 16,
+  "scope": "application",
+  "order": 10,
+  "markdownDescription": "**Daily working hours** for deadline calculations\n\nUsed with `#redmine.workinghours.workingdays#` to compute available time.\n\n**Common values:** 6, 7.5, 8, 10"
+}
+```
+
+**Key improvements**:
+- Add `scope: "application"` - sync across machines
+- Use `markdownDescription` - rich formatting with bold, code, links
+- Add `order` property - group related settings
+- Cross-reference with `#settingId#` - link related settings
+
+**Icon Theme Adaptation** (optional polish):
+- Activity bar icon (`logo.svg`) uses hardcoded colors
+- Consider theme-adaptive colors using `currentColor` in SVG
+- Low priority: only affects visual consistency in dark/light themes
+
+**Effort**: 30 minutes (settings), +15 minutes (icon)
+
+---
+
 ### Welcome View Pattern (UX Compliance)
 
 **⚠️ UX COMPLIANCE**: Add onboarding for first-time users
@@ -281,6 +314,50 @@ vscode.commands.executeCommand('setContext', 'redmine:serverConfigured', !!serve
 ```
 
 **Benefits**: Guides new users, improves first-time UX, reduces support burden
+
+---
+
+### Context Menu Pattern (UX Compliance)
+
+**⚠️ UX COMPLIANCE**: Add right-click menus for tree items
+
+**Add to package.json**:
+```json
+"menus": {
+  "view/item/context": [
+    {
+      "command": "redmine.openInBrowser",
+      "when": "view == 'redmine-explorer-my-issues' && viewItem == 'issue'",
+      "group": "navigation@1"
+    },
+    {
+      "command": "redmine.quickLogTime",
+      "when": "viewItem == 'issue'",
+      "group": "redmine@1"
+    },
+    {
+      "command": "redmine.copyIssueUrl",
+      "when": "viewItem == 'issue'",
+      "group": "9_cutcopypaste@1"
+    }
+  ]
+}
+```
+
+**Set contextValue on TreeItems**:
+```typescript
+treeItem.contextValue = issue.status.is_closed ? 'issue-closed' : 'issue-open';
+```
+
+**Standard VSCode Groups**:
+- `navigation` - Primary actions (open, view)
+- `inline` - Toolbar inline actions
+- `9_cutcopypaste` - Copy actions
+- `z_commands` - Secondary actions
+
+**Benefits**: Better discoverability, keyboard accessible (Shift+F10)
+
+**Effort**: +1 hour (MVP-1/2 implementation)
 
 ### Files to Create/Modify
 
@@ -940,7 +1017,7 @@ Time entry (child):
      "commands": [
        {
          "command": "redmine.refreshTimeEntries",
-         "title": "Refresh Time Entries",
+         "title": "Redmine: Refresh Time Entries",  // ⚠️ UX: Consistent category prefix
          "icon": "$(refresh)"
        }
      ],
@@ -1183,9 +1260,12 @@ interface RecentTimeLog {
        lastLogged: new Date()
      });
 
-     vscode.window.showInformationMessage(
-       `Logged ${hours}h to #${issueId}`
-     );
+     // ⚠️ UX COMPLIANCE: Flash status bar instead of notification (respects attention)
+     // ALTERNATIVE: Use notification with config option "redmine.notifications.showTimeLogConfirmation"
+     const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+     statusBar.text = `$(check) Logged ${hours}h to #${issueId}`;
+     statusBar.show();
+     setTimeout(() => statusBar.hide(), 3000);
    };
    ```
 
@@ -1270,7 +1350,9 @@ async function pickIssueAndActivity(
     }))
   ];
 
+  // ⚠️ UX COMPLIANCE: Add title and step indicator for multi-step flow
   const picked = await vscode.window.showQuickPick(quickPickItems, {
+    title: 'Log Time (1/2)',
     placeHolder: 'Select issue to log time',
     matchOnDescription: true
   });
@@ -1288,8 +1370,13 @@ async function pickIssueAndActivity(
   const activity = await vscode.window.showQuickPick(
     activities.time_entry_activities.map(a => ({
       label: a.name,
+      description: a.is_default ? 'Default' : undefined,  // ⚠️ UX: Show default activity
       activity: a
-    }))
+    })),
+    {
+      title: 'Log Time (2/2)',  // ⚠️ UX: Step indicator
+      placeHolder: 'Select activity'
+    }
   );
 
   if (!activity) throw new Error('No activity selected');
@@ -1576,10 +1663,11 @@ ${workload.topUrgent.map(i => `- #${i.id}: ${i.daysLeft}d left, ${i.hoursLeft}h 
 
 **Optimization Overhead** (integrated above):
 - Performance: +1.5h (memoization, caching, picker, event-driven, partial refresh)
-- UX Compliance: +3h (ThemeIcon, loading states, welcome views, configuration)
-- **Total overhead**: ~4.5 hours
+- UX Compliance (1st pass): +3h (ThemeIcon, loading states, welcome views, configuration)
+- UX Compliance (2nd pass): +1-3h (context menus, settings, notifications, quick pick titles)
+- **Total overhead**: ~5.5-8 hours
 
-**Grand Total**: ~25-37 hours (3-5 days) - includes all optimizations + UX compliance
+**Grand Total**: ~26-40 hours (3-5 days) - includes all optimizations + UX compliance
 
 **Breakdown by phase**:
 - P0 Features (MVP-1+2): 14-18h
