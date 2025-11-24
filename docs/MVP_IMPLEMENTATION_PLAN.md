@@ -16,6 +16,188 @@
 
 ---
 
+## VSCode API Patterns (Ultrathink Analysis)
+
+**Date**: 2025-11-24
+**Source**: Deep analysis of VSCode extension capabilities
+
+### Key Decisions
+
+**ALL MVPs use native VSCode UI** - no webviews needed.
+
+| MVP | VSCode Component | Pattern | Complexity |
+|-----|------------------|---------|------------|
+| **MVP-1** | TreeItem description + tooltip | `description` field + `MarkdownString` | LOW |
+| **MVP-2** | New tree view | Two-level hierarchy (collapsible groups) | MEDIUM |
+| **MVP-3** | QuickPick + InputBox | Native pickers + globalState cache | LOW |
+| **MVP-4** | Tree view (NOT webview) | Summary metrics + urgent issues | MEDIUM |
+
+### Critical Findings
+
+**1. TreeItem Capabilities**
+- `description`: Secondary text (reduced opacity) - PERFECT for "3.5/8h 2d +60% 🟢"
+- `tooltip`: MarkdownString for rich formatting (bold, lists, line breaks)
+- `iconPath`: Emoji in description simpler than custom icons
+- `command`: Pass context data to click handlers
+
+**2. Webview NOT Needed**
+- VSCode docs: "Use sparingly, only when native API inadequate"
+- Tree views handle all MVP requirements
+- Webview = 2-3x complexity + security overhead (CSP, sanitization)
+- MVP-4: Tree view 120 LOC vs webview 200-300 LOC
+
+**3. Storage Strategy**
+- `globalState`: Recent issues cache (syncs across machines via Settings Sync)
+- `workspaceState`: Project-specific data
+- `secrets`: API keys (already implemented)
+
+**4. Performance Patterns**
+- **Lazy calculation**: Compute flexibility in `getTreeItem()` (on-demand)
+- **Pre-calculate totals**: MVP-2 date groups fetch totals upfront to avoid parent label update issues
+- **Collapsible state**: Today=Expanded, Week=Collapsed
+- **Refresh optimization**: Calculate on-demand, no debouncing needed (<100 items)
+
+**5. Anti-Patterns to Avoid**
+- ❌ Don't use webviews for simple data display
+- ❌ Don't activate on `"*"` - use specific activation events
+- ❌ Don't block UI with sync operations - use `withProgress`
+- ❌ Don't store large data in globalState (2KB limit) - use file storage
+
+### MVP-Specific Patterns
+
+#### MVP-1: TreeItem Enhancement
+```typescript
+// File: src/utilities/tree-item-factory.ts
+treeItem.description = `3.5/8h 2d +100%→+60% 🟢  #${issue.id}`;
+
+// Rich tooltip
+treeItem.tooltip = new vscode.MarkdownString(`
+**Issue #${issue.id}: ${issue.subject}**
+
+**Progress:** 3.5h / 8h (44%)
+
+**Initial Plan:** +100% flexibility
+**Current Status:** +60% flexibility
+`);
+```
+
+**Key**: Emoji in description (🟢🟡🔴) simpler than ThemeIcon.
+
+#### MVP-2: Dynamic Parent Labels
+**Problem**: VSCode doesn't support updating parent label after children fetch.
+
+**Solution**: Pre-calculate totals in root `getChildren()` call.
+
+```typescript
+async getChildren(element?: TreeItem): Promise<TreeItem[]> {
+  if (!element) {
+    // Fetch totals upfront
+    const todayTotal = await this.fetchTotal(today(), today());
+    return [
+      { label: 'Today', total: todayTotal, from: today(), to: today() }
+    ];
+  }
+
+  // Return cached/re-fetched entries
+  return await this.server.getTimeEntries({ from: element.from, to: element.to });
+}
+
+getTreeItem(element: TreeItem): vscode.TreeItem {
+  return new vscode.TreeItem(
+    `📅 ${element.label} (${element.total}h)`,  // Total already known
+    element.label === 'Today'
+      ? vscode.TreeItemCollapsibleState.Expanded
+      : vscode.TreeItemCollapsibleState.Collapsed
+  );
+}
+```
+
+#### MVP-3: Quick Logging
+```typescript
+// Command with globalState cache
+const recent = context.globalState.get<RecentTimeLog>('lastTimeLog');
+
+const issueChoice = await vscode.window.showQuickPick([
+  { label: `$(clock) Log to #${recent.issueId}: ${recent.subject}`, value: 'recent' },
+  { label: '$(search) Choose different issue', value: 'new' }
+]);
+
+const input = await vscode.window.showInputBox({
+  prompt: `Log time to #${issueId}`,
+  placeHolder: '2.5|Implemented login',
+  validateInput: (val) => /^\d+\.?\d*\|.*$/.test(val) ? null : 'Format: hours|comment'
+});
+
+// Save recent
+context.globalState.update('lastTimeLog', { issueId, lastLogged: new Date() });
+```
+
+**Keybinding**: Chord pattern `Ctrl+K Ctrl+T` (VSCode convention, avoids conflicts).
+
+#### MVP-4: Tree View (Not Webview)
+```typescript
+// Tree structure
+📊 Summary
+├── Total estimated: 48h
+├── Remaining work: 25h
+└── Capacity: +7h buffer 🟢
+
+🔥 Top 3 Urgent
+├── #123: DUE TODAY, 8h left 🔴
+├── #456: 2d left, 5h left 🟡
+└── #789: 7d left, 12h left 🟢
+```
+
+**Pattern**: Similar to my-issues-tree.ts (120-150 LOC).
+
+**Webview rejected**: Zero value add for text-only summary. Save webview for future charts/graphs (v4.0+).
+
+### Configuration Patterns
+```typescript
+// package.json
+"redmine.workingHours.hoursPerDay": {
+  "type": "number",
+  "default": 8,
+  "minimum": 1,
+  "maximum": 24,
+  "description": "Working hours per day for flexibility calculation"
+}
+
+// Read with change listener
+const config = vscode.workspace.getConfiguration('redmine.workingHours');
+vscode.workspace.onDidChangeConfiguration(e => {
+  if (e.affectsConfiguration('redmine.workingHours')) {
+    this.refresh();
+  }
+});
+```
+
+### Files to Create/Modify
+
+**MVP-1** (6-8h):
+- CREATE: `src/utilities/flexibility-calculator.ts` (~100 LOC)
+- MODIFY: `src/utilities/tree-item-factory.ts` (description + tooltip)
+- MODIFY: `src/trees/my-issues-tree.ts` (pass config)
+
+**MVP-2** (4-6h):
+- CREATE: `src/trees/my-time-entries-tree.ts` (~200 LOC)
+- MODIFY: `src/extension.ts` (register tree view)
+- MODIFY: `package.json` (view contribution)
+
+**MVP-3** (3-4h):
+- CREATE: `src/commands/quick-log-time.ts` (~150 LOC)
+- MODIFY: `src/extension.ts` (register command + pass context)
+- MODIFY: `package.json` (command + keybinding)
+
+**MVP-4** (4-6h):
+- CREATE: `src/trees/workload-overview-tree.ts` (~120 LOC)
+- MODIFY: `src/extension.ts` (register tree view)
+- MODIFY: `package.json` (view contribution)
+
+**Total implementation**: 17-24h (matches original estimate)
+
+---
+
 ## MVP-1: Timeline & Progress Display
 
 ### Problem
@@ -270,16 +452,19 @@ function countWorkingDays(
    }
    ```
 
-3. **Modify**: `/src/utilities/tree-item-factory.ts`
+3. **Modify**: `/src/utilities/tree-item-factory.ts` (VSCode TreeItem pattern)
    - Accept `WorkingHoursConfig` parameter
    - Call `calculateFlexibility(issue, config)`
-   - Update description format: `{est}h {+/-}{flex}%`
-   - Add icon based on risk level
-   - Add detailed tooltip
+   - **VSCode API**: Set `treeItem.description = "3.5/8h 2d +100%→+60% 🟢  #123"`
+   - **VSCode API**: Use emoji in description for risk icons (🟢🟡🔴) - simpler than ThemeIcon
+   - **VSCode API**: Set `treeItem.tooltip = new vscode.MarkdownString()` for rich formatting
+   - Tooltip: Multi-line with progress, initial plan, current status (see VSCode API Patterns section)
 
 4. **Update tree providers**: `/src/trees/my-issues-tree.ts`, `/src/trees/projects-tree.ts`
-   - Read configuration from workspace settings
+   - **VSCode API**: Read config: `vscode.workspace.getConfiguration('redmine.workingHours')`
+   - **VSCode API**: Listen for changes: `onDidChangeConfiguration()` → refresh tree
    - Pass config to `createIssueTreeItem()`
+   - **Performance**: Calculate flexibility in `getTreeItem()` (lazy, on-demand) - see VSCode API Patterns
 
 5. **Add to package.json**: Configuration schema (see Configuration section above)
 
@@ -478,7 +663,7 @@ Time entry (child):
    }
    ```
 
-3. **Create Tree Provider**: `/src/trees/my-time-entries-tree.ts`
+3. **Create Tree Provider**: `/src/trees/my-time-entries-tree.ts` (VSCode TreeView pattern)
    ```typescript
    type TreeItem = DateGroup | TimeEntry | LoadingPlaceholder;
 
@@ -486,21 +671,25 @@ Time entry (child):
      label: string;      // "Today", "This Week"
      from: string;       // YYYY-MM-DD
      to: string;         // YYYY-MM-DD
-     total?: number;     // Calculated after fetch
+     total: number;      // ⚠️ CRITICAL: Pre-calculated (see VSCode API Patterns)
    }
 
    export class MyTimeEntriesTree implements vscode.TreeDataProvider<TreeItem> {
      async getChildren(element?: TreeItem): Promise<TreeItem[]> {
        if (!element) {
-         // Root: return date groups
+         // ⚠️ CRITICAL VSCode pattern: Pre-calculate totals upfront
+         // VSCode doesn't support updating parent labels after children fetch
+         const todayTotal = await this.fetchTotal(today(), today());
+         const weekTotal = await this.fetchTotal(weekAgo(), today());
+
          return [
-           { label: 'Today', from: today(), to: today() },
-           { label: 'This Week', from: weekAgo(), to: today() }
+           { label: 'Today', from: today(), to: today(), total: todayTotal },
+           { label: 'This Week', from: weekAgo(), to: today(), total: weekTotal }
          ];
        }
 
        if (element instanceof DateGroup) {
-         // Fetch time entries for date range
+         // Return cached or re-fetch entries
          const response = await this.server.getTimeEntries({
            userId: 'me',
            from: element.from,
@@ -508,31 +697,31 @@ Time entry (child):
            limit: 100
          });
 
-         // Calculate total
-         const total = response.time_entries.reduce(
-           (sum, entry) => sum + entry.hours, 0
-         );
-         element.total = total;
-
          return response.time_entries;
        }
+     }
+
+     // Helper to fetch total
+     private async fetchTotal(from: string, to: string): Promise<number> {
+       const response = await this.server.getTimeEntries({ userId: 'me', from, to, limit: 100 });
+       return response.time_entries.reduce((sum, e) => sum + e.hours, 0);
      }
 
      getTreeItem(element: TreeItem): vscode.TreeItem {
        if (element instanceof DateGroup) {
          return {
-           label: `📅 ${element.label}${element.total ? ` (${element.total}h)` : ''}`,
+           label: `📅 ${element.label} (${element.total}h)`,  // Total already known
            collapsibleState: element.label === 'Today'
-             ? vscode.TreeItemCollapsibleState.Expanded
-             : vscode.TreeItemCollapsibleState.Collapsed
+             ? vscode.TreeItemCollapsibleState.Expanded   // VSCode API: Today starts open
+             : vscode.TreeItemCollapsibleState.Collapsed  // VSCode API: Week starts closed
          };
        }
 
        if (element instanceof TimeEntry) {
          return {
            label: `#${element.issue.id} ${element.activity.name} ${element.hours}h "${element.comments}"`,
-           description: element.project.name,
-           command: {
+           description: element.project.name,  // VSCode API: Secondary text (reduced opacity)
+           command: {  // VSCode API: Click handler with context data
              command: 'redmine.openActionsForIssue',
              arguments: [false, { server: this.server }, String(element.issue.id)],
              title: `Open issue #${element.issue.id}`
@@ -751,21 +940,23 @@ interface RecentTimeLog {
 
 ### Implementation Plan
 
-1. **Create Command**: `/src/commands/quick-log-time.ts`
+1. **Create Command**: `/src/commands/quick-log-time.ts` (VSCode QuickPick + globalState pattern)
    ```typescript
    export default async ({ server }: ActionProperties, context: vscode.ExtensionContext) => {
-     // Get recent log from state
+     // VSCode API: globalState for persistent cache (syncs via Settings Sync)
      const recent = context.globalState.get<RecentTimeLog>('lastTimeLog');
 
      let issueId: number;
      let activityId: number;
 
      if (recent && isRecent(recent.lastLogged)) {
-       // Prompt with recent issue pre-filled
+       // VSCode API: showQuickPick with codicons ($(clock), $(search))
        const useRecent = await vscode.window.showQuickPick([
-         { label: `Log to #${recent.issueId}: ${recent.issueSubject}`, value: 'recent' },
-         { label: 'Choose different issue', value: 'new' }
-       ]);
+         { label: `$(clock) Log to #${recent.issueId}: ${recent.issueSubject}`, value: 'recent' },
+         { label: '$(search) Choose different issue', value: 'new' }
+       ], {
+         placeHolder: 'Quick time logging'  // VSCode API: Placeholder text
+       });
 
        if (!useRecent) return;
 
@@ -780,13 +971,13 @@ interface RecentTimeLog {
        ({ issueId, activityId } = await pickIssueAndActivity(server));
      }
 
-     // Input hours and comment
+     // VSCode API: showInputBox with real-time validation
      const input = await vscode.window.showInputBox({
        prompt: `Log time to #${issueId}`,
        placeHolder: '2.5|Implemented feature',
        validateInput: (value) => {
          const match = value.match(/^(\d+\.?\d*)\|(.*)$/);
-         return match ? null : 'Format: hours|comment';
+         return match ? null : 'Format: hours|comment';  // null = valid
        }
      });
 
@@ -802,7 +993,7 @@ interface RecentTimeLog {
        comments
      );
 
-     // Save to recent
+     // VSCode API: Update globalState cache
      context.globalState.update('lastTimeLog', {
        issueId,
        issueSubject: '...', // Fetch from issues list
@@ -817,14 +1008,15 @@ interface RecentTimeLog {
    };
    ```
 
-2. **Register Command**: `/src/extension.ts`
+2. **Register Command**: `/src/extension.ts` (CRITICAL: Pass context for globalState)
    ```typescript
+   // ⚠️ CRITICAL: Must pass context to command for globalState access
    registerCommand('quickLogTime', (props: ActionProperties) => {
-     return quickLogTime(props, context); // Pass context for state
+     return quickLogTime(props, context); // Pass context for globalState
    });
    ```
 
-3. **Add to package.json**:
+3. **Add to package.json**: (VSCode chord keybinding pattern)
    ```json
    "contributes": {
      "commands": [
@@ -836,8 +1028,9 @@ interface RecentTimeLog {
      "keybindings": [
        {
          "command": "redmine.quickLogTime",
-         "key": "ctrl+k ctrl+t",
-         "mac": "cmd+k cmd+t"
+         "key": "ctrl+k ctrl+t",      // VSCode convention: ctrl+k for chords
+         "mac": "cmd+k cmd+t",
+         "when": "!terminalFocus"     // VSCode API: Context clause (avoid conflicts)
        }
      ]
    }
