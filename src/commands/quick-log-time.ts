@@ -58,7 +58,7 @@ export async function quickLogTime(
     // 3. Input hours
     const hours = await vscode.window.showInputBox({
       prompt: `Hours worked on #${selection.issueId}`,
-      placeHolder: "2.5",
+      placeHolder: "e.g., 2.5",
       validateInput: (value: string) => {
         const num = parseFloat(value);
         if (isNaN(num) || num <= 0 || num > 24) {

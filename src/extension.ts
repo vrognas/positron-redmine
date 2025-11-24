@@ -382,7 +382,16 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     }
 
-    const pickedFolder = await vscode.window.showWorkspaceFolderPick();
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+      vscode.window.showErrorMessage("Please open a workspace folder first");
+      return Promise.resolve({ props: undefined, args: [] });
+    }
+
+    const pickedFolder =
+      folders.length === 1
+        ? folders[0]
+        : await vscode.window.showWorkspaceFolderPick();
 
     if (!pickedFolder) {
       return Promise.resolve({ props: undefined, args: [] });
