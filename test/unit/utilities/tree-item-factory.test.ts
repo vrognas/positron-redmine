@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { createIssueTreeItem } from "../../../src/utilities/tree-item-factory";
+import {
+  createIssueTreeItem,
+  createEnhancedIssueTreeItem,
+} from "../../../src/utilities/tree-item-factory";
 import { Issue } from "../../../src/redmine/models/issue";
+import { FlexibilityScore } from "../../../src/utilities/flexibility-calculator";
 
 describe("createIssueTreeItem", () => {
   const mockIssue: Issue = {
@@ -45,5 +49,92 @@ describe("createIssueTreeItem", () => {
     const treeItem = createIssueTreeItem(mockIssue, undefined, "test.command");
 
     expect(treeItem.collapsibleState).toBe(0); // TreeItemCollapsibleState.None
+  });
+});
+
+describe("createEnhancedIssueTreeItem", () => {
+  const mockIssue: Issue = {
+    id: 7392,
+    subject: "Test Issue",
+    tracker: { id: 1, name: "Tasks" },
+    status: { id: 1, name: "In Progress" },
+    author: { id: 1, name: "Author" },
+    project: { id: 1, name: "Test Project" },
+    priority: { id: 1, name: "Normal" },
+    assigned_to: { id: 2, name: "Assignee" },
+    description: "Test description",
+    start_date: "2025-11-01",
+    due_date: "2025-11-30",
+    done_ratio: 50,
+    is_private: false,
+    estimated_hours: 40,
+    spent_hours: 20,
+    created_on: "2024-01-01",
+    updated_on: "2024-01-01",
+    closed_on: null,
+  };
+
+  const mockFlexibility: FlexibilityScore = {
+    initial: 100,
+    remaining: 50,
+    status: "on-track",
+    daysRemaining: 10,
+    hoursRemaining: 20,
+  };
+
+  it("shows On Track status with icon", () => {
+    const treeItem = createEnhancedIssueTreeItem(
+      mockIssue,
+      mockFlexibility,
+      undefined,
+      "test.command"
+    );
+
+    expect(treeItem.description).toContain("On Track");
+    expect(treeItem.iconPath).toBeDefined();
+  });
+
+  it("shows Overbooked status for negative flexibility", () => {
+    const overbooked: FlexibilityScore = {
+      ...mockFlexibility,
+      remaining: -30,
+      status: "overbooked",
+    };
+
+    const treeItem = createEnhancedIssueTreeItem(
+      mockIssue,
+      overbooked,
+      undefined,
+      "test.command"
+    );
+
+    expect(treeItem.description).toContain("Overbooked");
+  });
+
+  it("shows Done for completed issues", () => {
+    const completed: FlexibilityScore = {
+      ...mockFlexibility,
+      status: "completed",
+    };
+
+    const treeItem = createEnhancedIssueTreeItem(
+      mockIssue,
+      completed,
+      undefined,
+      "test.command"
+    );
+
+    expect(treeItem.description).toContain("Done");
+  });
+
+  it("falls back to simple display when no flexibility", () => {
+    const treeItem = createEnhancedIssueTreeItem(
+      mockIssue,
+      null,
+      undefined,
+      "test.command"
+    );
+
+    expect(treeItem.description).toBe("#7392");
   });
 });

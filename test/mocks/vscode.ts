@@ -20,6 +20,7 @@ export const workspace = {
     update: vi.fn(),
   })),
   workspaceFolders: [],
+  onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
 };
 
 export const commands = {
@@ -71,16 +72,33 @@ export class TreeItem {
 
 export class MarkdownString {
   value: string;
+  isTrusted?: boolean;
+  supportHtml?: boolean;
 
-  constructor(value: string) {
+  constructor(value = "") {
     this.value = value;
+  }
+
+  appendMarkdown(value: string): this {
+    this.value += value;
+    return this;
+  }
+}
+
+export class ThemeColor {
+  id: string;
+
+  constructor(id: string) {
+    this.id = id;
   }
 }
 
 export class ThemeIcon {
   id: string;
+  color?: ThemeColor;
 
-  constructor(id: string) {
+  constructor(id: string, color?: ThemeColor) {
     this.id = id;
+    this.color = color;
   }
 }

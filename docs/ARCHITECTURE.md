@@ -41,7 +41,10 @@ positron-redmine/
 │   │   └── redmine-config.ts  # Extension configuration schema
 │   └── utilities/             # Helper functions
 │       ├── error-to-string.ts
-│       └── secret-manager.ts  # Secure API key storage
+│       ├── flexibility-calculator.ts  # Issue flexibility/risk calculation
+│       ├── workload-calculator.ts     # Workload summary for status bar
+│       ├── tree-item-factory.ts       # TreeItem creation helpers
+│       └── secret-manager.ts          # Secure API key storage
 ├── docs/                      # Documentation
 │   ├── ARCHITECTURE.md       # This file
 │   └── LESSONS_LEARNED.md    # Development insights

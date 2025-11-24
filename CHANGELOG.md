@@ -4,6 +4,42 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ## [Unreleased]
 
+## [3.4.0] - 2025-11-24
+
+### Added
+
+- MVP-4: Workload Overview status bar item
+- Shows remaining work and capacity buffer at a glance
+- Rich tooltip with top 3 urgent issues
+- Opt-in via `redmine.statusBar.showWorkload` setting (default: false)
+- Event-driven updates on tree refresh and config change
+- MyIssuesTree.getIssues() method for workload calculation
+
+### Changed
+
+- Status bar format: "25h left, +8h buffer"
+- Click status bar to list open issues
+
+## [3.3.0] - 2025-11-24
+
+### Added
+
+- MVP-1: Timeline & Progress Display with flexibility scores
+- Dual flexibility formula: initial (planning quality) + remaining (current risk)
+- Risk status indicators: On Track, At Risk, Overbooked, Done
+- ThemeIcon + ThemeColor for accessible risk display
+- Rich tooltip with progress, days remaining, hours remaining, flexibility %
+- Issues sorted by risk priority (overbooked first)
+- Context menus for issues: Open in Browser, Quick Log Time, Copy URL
+- Working hours memoization for performance
+- Config listener for weeklySchedule changes
+
+### Changed
+
+- Issue tree items now show enhanced format: "#id spent/est days status"
+- "Issues assigned to me" view sorted by urgency
+- Pre-calculated flexibility in getChildren() to avoid UI freeze
+
 ## [3.2.1] - 2025-11-24
 
 ### Added

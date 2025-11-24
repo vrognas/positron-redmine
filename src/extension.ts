@@ -17,6 +17,8 @@ import { ProjectsTree, ProjectsViewStyle } from "./trees/projects-tree";
 import { MyTimeEntriesTreeDataProvider } from "./trees/my-time-entries-tree";
 import { RedmineSecretManager } from "./utilities/secret-manager";
 import { setApiKey } from "./commands/set-api-key";
+import { calculateWorkload } from "./utilities/workload-calculator";
+import { WeeklySchedule } from "./utilities/flexibility-calculator";
 
 // Module-level cleanup resources
 let cleanupResources: {
@@ -26,6 +28,7 @@ let cleanupResources: {
   myIssuesTreeView?: vscode.TreeView<unknown>;
   projectsTreeView?: vscode.TreeView<unknown>;
   myTimeEntriesTreeView?: vscode.TreeView<unknown>;
+  workloadStatusBar?: vscode.StatusBarItem;
   bucket?: {
     servers: RedmineServer[];
     projects: RedmineProject[];
@@ -77,6 +80,88 @@ export function activate(context: vscode.ExtensionContext): void {
     treeDataProvider: myTimeEntriesTree,
   });
 
+  // Initialize workload status bar (opt-in via config)
+  const initializeWorkloadStatusBar = () => {
+    const config = vscode.workspace.getConfiguration("redmine.statusBar");
+    const showWorkload = config.get<boolean>("showWorkload", false);
+
+    // Dispose existing if disabled
+    if (!showWorkload && cleanupResources.workloadStatusBar) {
+      cleanupResources.workloadStatusBar.dispose();
+      cleanupResources.workloadStatusBar = undefined;
+      return;
+    }
+
+    if (!showWorkload) return;
+
+    // Create status bar if not exists
+    if (!cleanupResources.workloadStatusBar) {
+      cleanupResources.workloadStatusBar = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Right,
+        100
+      );
+      cleanupResources.workloadStatusBar.command = "redmine.listOpenIssuesAssignedToMe";
+      context.subscriptions.push(cleanupResources.workloadStatusBar);
+    }
+  };
+
+  // Update workload status bar content
+  const updateWorkloadStatusBar = async () => {
+    const statusBar = cleanupResources.workloadStatusBar;
+    if (!statusBar) return;
+
+    // Fetch issues if not cached (triggers initial load)
+    const issues = await myIssuesTree.fetchIssuesIfNeeded();
+
+    // Re-check after await - status bar might have been disposed
+    if (!cleanupResources.workloadStatusBar) return;
+
+    if (issues.length === 0) {
+      statusBar.hide();
+      return;
+    }
+
+    const scheduleConfig = vscode.workspace.getConfiguration("redmine.workingHours");
+    const schedule = scheduleConfig.get<WeeklySchedule>("weeklySchedule", {
+      Mon: 8, Tue: 8, Wed: 8, Thu: 8, Fri: 8, Sat: 0, Sun: 0,
+    });
+
+    const workload = calculateWorkload(issues, schedule);
+
+    // Text format: "25h left, +8h buffer"
+    const bufferText = workload.buffer >= 0 ? `+${workload.buffer}h` : `${workload.buffer}h`;
+    statusBar.text = `$(pulse) ${workload.remaining}h left, ${bufferText} buffer`;
+
+    // Rich tooltip with top 3 urgent
+    const tooltip = new vscode.MarkdownString();
+    tooltip.isTrusted = true;
+    tooltip.appendMarkdown("**Workload Overview**\n\n");
+    tooltip.appendMarkdown(`**Remaining work:** ${workload.remaining}h\n\n`);
+    tooltip.appendMarkdown(`**Available this week:** ${workload.availableThisWeek}h\n\n`);
+    tooltip.appendMarkdown(`**Buffer:** ${bufferText} ${workload.buffer >= 0 ? "(On Track)" : "(Overbooked)"}\n\n`);
+
+    if (workload.topUrgent.length > 0) {
+      tooltip.appendMarkdown("**Top Urgent:**\n");
+      for (const issue of workload.topUrgent) {
+        tooltip.appendMarkdown(`- #${issue.id}: ${issue.daysLeft}d, ${issue.hoursLeft}h left\n`);
+      }
+    }
+
+    statusBar.tooltip = tooltip;
+    statusBar.show();
+  };
+
+  // Initialize status bar and trigger initial load
+  initializeWorkloadStatusBar();
+  updateWorkloadStatusBar();
+
+  // Update on tree refresh
+  myIssuesTree.onDidChangeTreeData$.event(() => {
+    if (cleanupResources.workloadStatusBar) {
+      updateWorkloadStatusBar();
+    }
+  });
+
   // Listen for secret changes
   context.subscriptions.push(
     secretManager.onSecretChanged(() => {
@@ -125,6 +210,8 @@ export function activate(context: vscode.ExtensionContext): void {
         projectsTree.onDidChangeTreeData$.fire();
         myIssuesTree.onDidChangeTreeData$.fire();
         myTimeEntriesTree.refresh();
+        // Update status bar after server is configured
+        updateWorkloadStatusBar();
       } catch (error) {
         vscode.window.showErrorMessage(
           `Failed to initialize Redmine server: ${error}`
@@ -144,8 +231,23 @@ export function activate(context: vscode.ExtensionContext): void {
   // Listen for configuration changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration("redmine")) {
+      // Only update server context for server-related config changes
+      // Skip for UI-only configs (statusBar, workingHours)
+      if (
+        event.affectsConfiguration("redmine") &&
+        !event.affectsConfiguration("redmine.statusBar") &&
+        !event.affectsConfiguration("redmine.workingHours")
+      ) {
         await updateConfiguredContext();
+      }
+      // Re-initialize status bar on config change
+      if (event.affectsConfiguration("redmine.statusBar")) {
+        initializeWorkloadStatusBar();
+        updateWorkloadStatusBar();
+      }
+      // Update status bar on schedule change
+      if (event.affectsConfiguration("redmine.workingHours")) {
+        updateWorkloadStatusBar();
       }
     })
   );
@@ -584,6 +686,29 @@ export function activate(context: vscode.ExtensionContext): void {
 
     await vscode.env.openExternal(vscode.Uri.parse(`${props.server.options.address}/issues/${issueId}`));
   });
+
+  // Open issue in browser (context menu for my-issues tree)
+  registerCommand("openIssueInBrowser", async (props: ActionProperties, ...args: unknown[]) => {
+    // Tree item passes the Issue object
+    const issue = args[0] as { id: number } | undefined;
+    if (!issue?.id) {
+      vscode.window.showErrorMessage('Could not determine issue ID');
+      return;
+    }
+    await vscode.env.openExternal(vscode.Uri.parse(`${props.server.options.address}/issues/${issue.id}`));
+  });
+
+  // Copy issue URL to clipboard (context menu for my-issues tree)
+  registerCommand("copyIssueUrl", async (props: ActionProperties, ...args: unknown[]) => {
+    const issue = args[0] as { id: number } | undefined;
+    if (!issue?.id) {
+      vscode.window.showErrorMessage('Could not determine issue ID');
+      return;
+    }
+    const url = `${props.server.options.address}/issues/${issue.id}`;
+    await vscode.env.clipboard.writeText(url);
+    vscode.window.showInformationMessage(`Copied URL for issue #${issue.id}`);
+  });
   context.subscriptions.push(
     vscode.commands.registerCommand("redmine.refreshIssues", () => {
       projectsTree.clearProjects();
@@ -645,6 +770,11 @@ export function deactivate(): void {
   }
   if (cleanupResources.projectsTreeView) {
     cleanupResources.projectsTreeView.dispose();
+  }
+
+  // Dispose status bar
+  if (cleanupResources.workloadStatusBar) {
+    cleanupResources.workloadStatusBar.dispose();
   }
 
   // Dispose and clear bucket servers
