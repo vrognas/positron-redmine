@@ -107,12 +107,17 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Update workload status bar content
   const updateWorkloadStatusBar = async () => {
-    if (!cleanupResources.workloadStatusBar) return;
+    const statusBar = cleanupResources.workloadStatusBar;
+    if (!statusBar) return;
 
     // Fetch issues if not cached (triggers initial load)
     const issues = await myIssuesTree.fetchIssuesIfNeeded();
+
+    // Re-check after await - status bar might have been disposed
+    if (!cleanupResources.workloadStatusBar) return;
+
     if (issues.length === 0) {
-      cleanupResources.workloadStatusBar.hide();
+      statusBar.hide();
       return;
     }
 
@@ -125,7 +130,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // Text format: "25h left, +8h buffer"
     const bufferText = workload.buffer >= 0 ? `+${workload.buffer}h` : `${workload.buffer}h`;
-    cleanupResources.workloadStatusBar.text = `$(pulse) ${workload.remaining}h left, ${bufferText} buffer`;
+    statusBar.text = `$(pulse) ${workload.remaining}h left, ${bufferText} buffer`;
 
     // Rich tooltip with top 3 urgent
     const tooltip = new vscode.MarkdownString();
@@ -142,8 +147,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }
 
-    cleanupResources.workloadStatusBar.tooltip = tooltip;
-    cleanupResources.workloadStatusBar.show();
+    statusBar.tooltip = tooltip;
+    statusBar.show();
   };
 
   // Initialize status bar and trigger initial load

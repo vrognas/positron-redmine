@@ -36,6 +36,7 @@ const STATUS_PRIORITY: Record<FlexibilityScore["status"], number> = {
 export class MyIssuesTree implements vscode.TreeDataProvider<TreeItem> {
   server?: RedmineServer;
   private isLoading = false;
+  private pendingFetch: Promise<Issue[]> | null = null;
   private flexibilityCache = new Map<number, FlexibilityScore | null>();
   private cachedIssues: Issue[] = [];
   private configListener: vscode.Disposable | undefined;
@@ -128,7 +129,8 @@ export class MyIssuesTree implements vscode.TreeDataProvider<TreeItem> {
   }
 
   /**
-   * Fetch issues if not cached, for status bar initial load
+   * Fetch issues if not cached, for status bar initial load.
+   * Prevents concurrent fetches by returning pending promise.
    */
   async fetchIssuesIfNeeded(): Promise<Issue[]> {
     if (this.cachedIssues.length > 0) {
@@ -137,8 +139,16 @@ export class MyIssuesTree implements vscode.TreeDataProvider<TreeItem> {
     if (!this.server) {
       return [];
     }
-    await this.getChildren();
-    return this.cachedIssues;
+    // Return existing fetch if in progress
+    if (this.pendingFetch) {
+      return this.pendingFetch;
+    }
+    // Start new fetch
+    this.pendingFetch = this.getChildren().then(() => {
+      this.pendingFetch = null;
+      return this.cachedIssues;
+    });
+    return this.pendingFetch;
   }
 
   private getScheduleConfig(): WeeklySchedule {
