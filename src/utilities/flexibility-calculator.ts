@@ -118,7 +118,7 @@ function calculateFlexibilityPercent(
  * Count working days between two dates (inclusive)
  * Uses memoization for performance
  */
-function countWorkingDays(
+export function countWorkingDays(
   start: Date,
   end: Date,
   schedule: WeeklySchedule
@@ -150,7 +150,7 @@ function countWorkingDays(
 /**
  * Count available working hours between two dates (inclusive)
  */
-function countAvailableHours(
+export function countAvailableHours(
   start: Date,
   end: Date,
   schedule: WeeklySchedule

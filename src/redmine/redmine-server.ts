@@ -232,6 +232,16 @@ export class RedmineServer {
 
       clientRequest.on("error", handleError);
 
+      // 30 second timeout to prevent indefinite hangs
+      if (typeof clientRequest.setTimeout === "function") {
+        clientRequest.setTimeout(30000, () => {
+          clientRequest.destroy();
+          const error = new Error("Request timeout after 30 seconds");
+          this.onResponseError(undefined, undefined, error, path, method, data, undefined, undefined, requestId);
+          reject(error);
+        });
+      }
+
       clientRequest.end(data);
     });
   }

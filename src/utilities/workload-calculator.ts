@@ -9,7 +9,11 @@
  */
 
 import { Issue } from "../redmine/models/issue";
-import { WeeklySchedule } from "./flexibility-calculator";
+import {
+  WeeklySchedule,
+  countWorkingDays,
+  countAvailableHours,
+} from "./flexibility-calculator";
 
 export interface WorkloadSummary {
   /** Total estimated hours across all issues */
@@ -91,68 +95,4 @@ function getWeekEnd(today: Date): Date {
   const daysToFriday = dayOfWeek <= 5 ? 5 - dayOfWeek : -1; // If Sat, go back to Fri
   date.setDate(date.getDate() + daysToFriday);
   return date;
-}
-
-/**
- * Count working days between two dates (inclusive)
- */
-function countWorkingDays(
-  start: Date,
-  end: Date,
-  schedule: WeeklySchedule
-): number {
-  let count = 0;
-  const current = new Date(start);
-  current.setHours(0, 0, 0, 0);
-  const endDate = new Date(end);
-  endDate.setHours(0, 0, 0, 0);
-
-  while (current <= endDate) {
-    const dayName = getDayName(current);
-    if (schedule[dayName] > 0) {
-      count++;
-    }
-    current.setDate(current.getDate() + 1);
-  }
-
-  return count;
-}
-
-/**
- * Count available working hours between two dates (inclusive)
- */
-function countAvailableHours(
-  start: Date,
-  end: Date,
-  schedule: WeeklySchedule
-): number {
-  let hours = 0;
-  const current = new Date(start);
-  current.setHours(0, 0, 0, 0);
-  const endDate = new Date(end);
-  endDate.setHours(0, 0, 0, 0);
-
-  while (current <= endDate) {
-    const dayName = getDayName(current);
-    hours += schedule[dayName];
-    current.setDate(current.getDate() + 1);
-  }
-
-  return hours;
-}
-
-/**
- * Get day name from Date object
- */
-function getDayName(date: Date): keyof WeeklySchedule {
-  const days: (keyof WeeklySchedule)[] = [
-    "Sun",
-    "Mon",
-    "Tue",
-    "Wed",
-    "Thu",
-    "Fri",
-    "Sat",
-  ];
-  return days[date.getDay()];
 }

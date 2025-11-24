@@ -4,6 +4,7 @@ import { RedmineServer } from "../redmine/redmine-server";
 import { Issue } from "../redmine/models/issue";
 import { IssueStatus as RedmineIssueStatus } from "../redmine/models/issue-status";
 import { TimeEntryActivity } from "../redmine/models/time-entry-activity";
+import { errorToString } from "../utilities/error-to-string";
 
 interface TimeEntryActivityItem extends vscode.QuickPickItem {
   activity: TimeEntryActivity;
@@ -63,8 +64,8 @@ export class IssueController {
       vscode.window.showInformationMessage(
         `Time entry for issue #${this.issue.id} has been added.`
       );
-    } catch (reason) {
-      vscode.window.showErrorMessage(reason as string);
+    } catch (error) {
+      vscode.window.showErrorMessage(errorToString(error));
     }
   }
 
@@ -89,8 +90,8 @@ export class IssueController {
       vscode.window.showInformationMessage(
         `Issue #${this.issue.id} status changed to ${stat.fullIssue.name}`
       );
-    } catch (reason) {
-      vscode.window.showErrorMessage(reason as string);
+    } catch (error) {
+      vscode.window.showErrorMessage(errorToString(error));
     }
   }
 
@@ -102,8 +103,8 @@ export class IssueController {
           `${this.redmine.options.address}/issues/${this.issue.id}`
         )
       );
-    } catch (reason) {
-      vscode.window.showErrorMessage(reason as string);
+    } catch (error) {
+      vscode.window.showErrorMessage(errorToString(error));
     }
   }
 
@@ -252,8 +253,8 @@ export class IssueController {
       if (option.action === "quickUpdate") {
         this.quickUpdate();
       }
-    } catch (_error) {
-      /* ? */
+    } catch (error) {
+      vscode.window.showErrorMessage(errorToString(error));
     }
   }
 }
