@@ -25,6 +25,7 @@ export class MyTimeEntriesTreeDataProvider
   private isLoading = false;
   private server?: RedmineServer;
   private issueCache = new Map<number, { id: number; subject: string }>();
+  private cachedGroups?: TimeEntryNode[];
 
   constructor() {}
 
@@ -32,12 +33,86 @@ export class MyTimeEntriesTreeDataProvider
     this.server = server;
     // Clear cache when server changes
     this.issueCache.clear();
+    this.cachedGroups = undefined;
   }
 
   refresh(): void {
     // Clear cache on refresh to get fresh data
     this.issueCache.clear();
+    this.cachedGroups = undefined;
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  private async loadTimeEntries(): Promise<void> {
+    if (!this.server) {
+      this.isLoading = false;
+      return;
+    }
+
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const weekStart = getWeekStart();
+      const monthStart = getMonthStart();
+
+      // Fetch entries in parallel (3 requests)
+      const [todayResult, weekResult, monthResult] = await Promise.all([
+        this.server.getTimeEntries({ from: today, to: today }),
+        this.server.getTimeEntries({ from: weekStart, to: today }),
+        this.server.getTimeEntries({ from: monthStart, to: today }),
+      ]);
+
+      const todayTotal = calculateTotal(todayResult.time_entries);
+      const weekTotal = calculateTotal(weekResult.time_entries);
+      const monthTotal = calculateTotal(monthResult.time_entries);
+
+      // Get working hours config (supports both old and new format)
+      const config = vscode.workspace.getConfiguration("redmine.workingHours");
+      const schedule = getWeeklySchedule(config);
+
+      // Calculate available hours for each period
+      const todayAvailable = getHoursForDate(new Date(), schedule);
+      const weekAvailable = calculateAvailableHours(
+        new Date(weekStart),
+        new Date(today),
+        schedule
+      );
+      const monthAvailable = calculateAvailableHours(
+        new Date(monthStart),
+        new Date(today),
+        schedule
+      );
+
+      this.cachedGroups = [
+        {
+          label: "Today",
+          description: formatHoursWithComparison(todayTotal, todayAvailable),
+          collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+          type: "group",
+          _cachedEntries: todayResult.time_entries,
+        },
+        {
+          label: "This Week",
+          description: formatHoursWithComparison(weekTotal, weekAvailable),
+          collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+          type: "group",
+          _cachedEntries: weekResult.time_entries,
+        },
+        {
+          label: "This Month",
+          description: formatHoursWithComparison(monthTotal, monthAvailable),
+          collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+          type: "group",
+          _cachedEntries: monthResult.time_entries,
+        },
+      ];
+    } catch (error) {
+      // On error, show empty state
+      this.cachedGroups = [];
+    } finally {
+      this.isLoading = false;
+      // Trigger re-render with actual data
+      this._onDidChangeTreeData.fire(undefined);
+    }
   }
 
   async getChildren(element?: TimeEntryNode): Promise<TimeEntryNode[]> {
@@ -46,8 +121,19 @@ export class MyTimeEntriesTreeDataProvider
       return [];
     }
 
-    // Loading state for root level
-    if (!element && this.isLoading) {
+    // Root level - date groups
+    if (!element) {
+      // Return cached if available
+      if (this.cachedGroups) {
+        return this.cachedGroups;
+      }
+
+      // Return loading state and fetch in background
+      if (!this.isLoading) {
+        this.isLoading = true;
+        this.loadTimeEntries();
+      }
+
       return [
         {
           label: "Loading time entries...",
@@ -56,71 +142,6 @@ export class MyTimeEntriesTreeDataProvider
           type: "loading",
         },
       ];
-    }
-
-    // Root level - date groups
-    if (!element) {
-      this.isLoading = true;
-
-      try {
-        const today = new Date().toISOString().split("T")[0];
-        const weekStart = getWeekStart();
-        const monthStart = getMonthStart();
-
-        // Fetch entries in parallel (3 requests)
-        const [todayResult, weekResult, monthResult] = await Promise.all([
-          this.server.getTimeEntries({ from: today, to: today }),
-          this.server.getTimeEntries({ from: weekStart, to: today }),
-          this.server.getTimeEntries({ from: monthStart, to: today }),
-        ]);
-
-        const todayTotal = calculateTotal(todayResult.time_entries);
-        const weekTotal = calculateTotal(weekResult.time_entries);
-        const monthTotal = calculateTotal(monthResult.time_entries);
-
-        // Get working hours config (supports both old and new format)
-        const config = vscode.workspace.getConfiguration("redmine.workingHours");
-        const schedule = getWeeklySchedule(config);
-
-        // Calculate available hours for each period
-        const todayAvailable = getHoursForDate(new Date(), schedule);
-        const weekAvailable = calculateAvailableHours(
-          new Date(weekStart),
-          new Date(today),
-          schedule
-        );
-        const monthAvailable = calculateAvailableHours(
-          new Date(monthStart),
-          new Date(today),
-          schedule
-        );
-
-        return [
-          {
-            label: "Today",
-            description: formatHoursWithComparison(todayTotal, todayAvailable),
-            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
-            type: "group",
-            _cachedEntries: todayResult.time_entries,
-          },
-          {
-            label: "This Week",
-            description: formatHoursWithComparison(weekTotal, weekAvailable),
-            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
-            type: "group",
-            _cachedEntries: weekResult.time_entries,
-          },
-          {
-            label: "This Month",
-            description: formatHoursWithComparison(monthTotal, monthAvailable),
-            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
-            type: "group",
-            _cachedEntries: monthResult.time_entries,
-          },
-        ];
-      } finally {
-        this.isLoading = false;
-      }
     }
 
     // Child level - time entries (use cached)
