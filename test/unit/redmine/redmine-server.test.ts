@@ -31,7 +31,11 @@ vi.mock("http", async () => {
           response.statusCode = 200;
           response.statusMessage = "OK";
 
-          setTimeout(() => {
+          // Call callback first (synchronous)
+          callback(response);
+
+          // Then emit data and end events asynchronously
+          queueMicrotask(() => {
             let data: unknown;
 
             if (options.method === "GET" && path.includes("/issues.json")) {
@@ -108,9 +112,7 @@ vi.mock("http", async () => {
 
             response.emit("data", Buffer.from(JSON.stringify(data)));
             response.emit("end");
-          }, 0);
-
-          callback(response);
+          });
         };
         request.on = function (
           event: string,
