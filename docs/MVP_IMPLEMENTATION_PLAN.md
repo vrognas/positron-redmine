@@ -1175,43 +1175,99 @@ Dashboard showing:
 
 ---
 
-## Implementation Sequence
+## Recommended Implementation Order
 
-### Phase 1: P0 Features (Week 1) - 10-14h
-1. **MVP-1**: Timeline & Progress Display (6-8h)
-   - Dual flexibility formula (initial + remaining)
-   - Spent/estimated hours display
-   - Days remaining calculation
-   - Risk indicators based on current status
-2. **MVP-2**: Time Entry Viewing (4-6h)
-   - View logged time (Today, This Week)
-   - Verify totals for billing accuracy
-   - Auto-refresh after logging
-3. Testing + documentation (2h)
-4. **Release**: v3.2.0
+**⚠️ IMPLEMENT IN THIS SEQUENCE** (not by MVP number):
 
-**Value**: Core billing workflow enabled - work prioritization + time verification
+### 1️⃣ MVP-3: Quick Time Logging (3-4h) ⭐ START HERE
+**Why first**:
+- ✅ Simplest design (perfect, zero fixes needed)
+- ✅ Highest ROI (10x faster logging)
+- ✅ Tests caching patterns for later MVPs
+- ✅ Immediate user value
 
-### Phase 2: P1 Features (Week 2) - 7-10h
-1. **MVP-3**: Quick Time Logging (3-4h)
-   - `Ctrl+K Ctrl+T` keybinding
-   - 5-issue LRU cache
-   - Activity defaulting
-2. **MVP-4**: Workload Overview (4-6h)
-   - Total remaining work across all issues
-   - Available capacity this week
-   - Top 3 urgent issues
-3. Testing + documentation (2h)
-4. **Release**: v3.3.0
+**Tasks**:
+- `Ctrl+K Ctrl+L` keybinding (fixed conflict)
+- 1-issue globalState cache
+- Activity defaulting
 
-**Value**: Workflow efficiency - rapid logging + capacity planning
+**Deliverable**: v3.2.0-alpha
+
+---
+
+### 2️⃣ MVP-2: Time Entry Viewing (4-6h)
+**Why second**:
+- ✅ Validates caching approach (learns from MVP-3)
+- ✅ P0 priority (billing verification critical)
+- ✅ Moderate complexity (good learning step)
+
+**Tasks**:
+- Cached time entries (pre-calculate totals)
+- Collapsible date groups (start Collapsed)
+- Tree view with click handlers
+
+**Deliverable**: v3.2.0-beta
+
+---
+
+### 3️⃣ MVP-1: Timeline & Progress Display (8-10h)
+**Why third**:
+- ⚠️ Most complex (pre-calc caching, dual formulas)
+- ⚠️ Highest risk (performance-critical)
+- ✅ Benefits from lessons learned in MVP-2/3
+- ✅ P0 priority (work prioritization)
+
+**Tasks**:
+- Dual flexibility formula (initial + remaining)
+- Pre-calculated caching in getChildren()
+- Simplified description (current status only)
+- Rich tooltips (full details)
+
+**Deliverable**: v3.2.0 (P0 complete)
+
+---
+
+### 4️⃣ MVP-4: Workload Overview (1-2h)
+**Why last**:
+- ✅ Trivial implementation (status bar item ~20 LOC)
+- ✅ P1 priority (nice-to-have polish)
+- ✅ Quick win after complex MVP-1
+
+**Tasks**:
+- Status bar item (always visible)
+- Tooltip with workload details
+- Command for QuickPick details
+
+**Deliverable**: v3.3.0 (full MVP suite)
+
+---
+
+## Priority-Based Phases (Reference Only)
+
+### Phase 1: P0 Features - 12-16h
+1. **MVP-1**: Timeline & Progress Display (8-10h) ← Complex, do 3rd
+2. **MVP-2**: Time Entry Viewing (4-6h) ← Moderate, do 2nd
+
+**Release**: v3.2.0
+**Value**: Core billing workflow
+
+### Phase 2: P1 Features - 4-6h
+1. **MVP-3**: Quick Time Logging (3-4h) ← Simple, do 1st ⭐
+2. **MVP-4**: Workload Overview (1-2h) ← Trivial, do 4th
+
+**Release**: v3.3.0
+**Value**: Workflow efficiency
+
+---
 
 ### Total Estimated Effort
-- Phase 1 (P0): 10-14h
-- Phase 2 (P1): 7-10h
+- MVP-3: 3-4h (start)
+- MVP-2: 4-6h
+- MVP-1: 8-10h (most complex)
+- MVP-4: 1-2h (finish)
 - Testing: ~6-8 hours
 - Documentation: ~3-4 hours
-- **Total**: ~26-36 hours (3-5 days)
+- **Total**: ~22-34 hours (3-4 days)
 
 ### Expected Impact
 - **After P0 (MVP-1+2)**: 60-65% workflow coverage, ~5 browser visits/day
