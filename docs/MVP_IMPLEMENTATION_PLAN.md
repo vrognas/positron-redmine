@@ -132,25 +132,46 @@ const input = await vscode.window.showInputBox({
 context.globalState.update('lastTimeLog', { issueId, lastLogged: new Date() });
 ```
 
-**Keybinding**: Chord pattern `Ctrl+K Ctrl+T` (VSCode convention, avoids conflicts).
+**Keybinding**: Chord pattern `Ctrl+K Ctrl+L` (VSCode convention, L for "Log")
+- ⚠️ CRITICAL: `Ctrl+K Ctrl+T` conflicts with VSCode's Color Theme picker (default since 2016)
+- Changed to `Ctrl+K Ctrl+L` - unassigned in default VSCode, mnemonic for **L**og time
 
-#### MVP-4: Tree View (Not Webview)
+#### MVP-4: Status Bar Item (Not Tree View or Webview)
 ```typescript
-// Tree structure
-📊 Summary
-├── Total estimated: 48h
-├── Remaining work: 25h
-└── Capacity: +7h buffer 🟢
+// Status bar (always visible, minimal code)
+const statusBar = vscode.window.createStatusBarItem(
+  vscode.StatusBarAlignment.Right,
+  100
+);
+statusBar.text = "$(pulse) 25h left, +7h 🟢";
+statusBar.tooltip = new vscode.MarkdownString(`
+**Workload Overview**
 
-🔥 Top 3 Urgent
-├── #123: DUE TODAY, 8h left 🔴
-├── #456: 2d left, 5h left 🟡
-└── #789: 7d left, 12h left 🟢
+Total estimated: 48h
+Total spent: 23h
+Remaining work: 25h
+Available this week: 32h
+Capacity: +7h buffer 🟢
+
+**Top 3 Urgent:**
+- #123: DUE TODAY, 8h left 🔴
+- #456: 2d left, 5h left 🟡
+- #789: 7d left, 12h left 🟢
+`);
+statusBar.command = "redmine.showWorkloadDetails";
+statusBar.show();
 ```
 
-**Pattern**: Similar to my-issues-tree.ts (120-150 LOC).
+**Pattern**: Status bar item (~20 LOC) vs tree view (~120 LOC).
 
-**Webview rejected**: Zero value add for text-only summary. Save webview for future charts/graphs (v4.0+).
+**Why status bar > tree view**:
+- Always visible (no view switching)
+- 6× simpler implementation
+- Tooltip provides full details
+- Command opens QuickPick for interaction
+
+**Tree view rejected**: Not truly hierarchical data, poor copy/paste UX
+**Webview rejected**: Overkill for MVP, defer to v4.0 if charts needed
 
 ### Configuration Patterns
 ```typescript
@@ -189,12 +210,12 @@ vscode.workspace.onDidChangeConfiguration(e => {
 - MODIFY: `src/extension.ts` (register command + pass context)
 - MODIFY: `package.json` (command + keybinding)
 
-**MVP-4** (4-6h):
-- CREATE: `src/trees/workload-overview-tree.ts` (~120 LOC)
-- MODIFY: `src/extension.ts` (register tree view)
-- MODIFY: `package.json` (view contribution)
+**MVP-4** (1-2h):
+- MODIFY: `src/extension.ts` (create status bar item ~20 LOC)
+- CREATE: `src/commands/show-workload-details.ts` (~50 LOC for QuickPick details)
+- MODIFY: `package.json` (command only, NO view contribution)
 
-**Total implementation**: 17-24h (matches original estimate)
+**Total implementation**: 16-22h (optimized from original 17-24h)
 
 ---
 
@@ -309,7 +330,7 @@ Conclusion: Well-planned (+150%) and on track (+100%) ✅
     "type": "number",
     "default": 8,
     "minimum": 1,
-    "maximum": 24,
+    "maximum": 16,              // ⚠️ FIXED: Was 24 (unrealistic), now 16
     "description": "Working hours per day for flexibility calculation"
   },
   "redmine.workingHours.workingDays": {
@@ -319,6 +340,9 @@ Conclusion: Well-planned (+150%) and on track (+100%) ✅
       "enum": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     },
     "default": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    "minItems": 1,              // ⚠️ ADDED: Prevent empty array (breaks calculations)
+    "maxItems": 7,              // ⚠️ ADDED: Max 7 days in week
+    "uniqueItems": true,        // ⚠️ ADDED: No duplicate days
     "description": "Working days of the week (excludes weekends/off-days)"
   },
   "redmine.timeline.enabled": {
@@ -463,8 +487,26 @@ function countWorkingDays(
 4. **Update tree providers**: `/src/trees/my-issues-tree.ts`, `/src/trees/projects-tree.ts`
    - **VSCode API**: Read config: `vscode.workspace.getConfiguration('redmine.workingHours')`
    - **VSCode API**: Listen for changes: `onDidChangeConfiguration()` → refresh tree
-   - Pass config to `createIssueTreeItem()`
-   - **Performance**: Calculate flexibility in `getTreeItem()` (lazy, on-demand) - see VSCode API Patterns
+   - **⚠️ CRITICAL FIX**: Pre-calculate flexibility in `getChildren()`, NOT `getTreeItem()`
+   - **Performance**: Lazy calc in `getTreeItem()` causes 200+ API calls per refresh (freezes UI)
+   ```typescript
+   // CORRECT pattern:
+   async getChildren() {
+     const issues = await this.server.getIssuesAssignedToMe();
+
+     // Calculate ONCE during fetch
+     for (const issue of issues) {
+       issue._cachedFlexibility = await this.calculateFlexibility(issue, config);
+     }
+
+     return issues;
+   }
+
+   getTreeItem(issue) {
+     // Use cached value - no API calls
+     treeItem.description = `${issue._cachedFlexibility}`;
+   }
+   ```
 
 5. **Add to package.json**: Configuration schema (see Configuration section above)
 
@@ -1028,9 +1070,9 @@ interface RecentTimeLog {
      "keybindings": [
        {
          "command": "redmine.quickLogTime",
-         "key": "ctrl+k ctrl+t",      // VSCode convention: ctrl+k for chords
-         "mac": "cmd+k cmd+t",
-         "when": "!terminalFocus"     // VSCode API: Context clause (avoid conflicts)
+         "key": "ctrl+k ctrl+l",      // ⚠️ FIXED: Was ctrl+t (conflicts with Color Theme)
+         "mac": "cmd+k cmd+l",         // L for "Log time"
+         "when": "!terminalFocus && !editorTextFocus && !inDebugMode"
        }
      ]
    }
