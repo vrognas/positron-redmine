@@ -89,7 +89,7 @@ vi.mock("http", async () => {
               };
             } else if (
               options.method === "GET" &&
-              path.includes("/time_entry_activities.json")
+              path.includes("/enumerations/time_entry_activities.json")
             ) {
               data = {
                 time_entry_activities: [{ id: 9, name: "Development" }],
