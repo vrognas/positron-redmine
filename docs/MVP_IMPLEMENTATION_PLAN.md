@@ -41,10 +41,17 @@ Calculate TWO flexibility scores: **initial** (planning quality - static) and **
     "total_estimated_hours": 20.0,      // ✅ Includes subtasks (Redmine 3.3+)
     "total_spent_hours": 4.5,           // ✅ Includes subtasks (Redmine 3.3+)
     "created_on": "2025-11-18",         // ✅ Fallback if no start_date
-    "status": { "id": 1, "name": "New", "is_closed": false }  // ✅ For filtering
+    "status": { "id": 1, "name": "New", "is_closed": false },  // ✅ For filtering
+    "fixed_version": { "id": 3, "name": "v2.1" }  // 💡 OPTIONAL: Version/milestone context
   }
 }
 ```
+
+**💡 OPTIONAL ENHANCEMENT**: `fixed_version` field available on all issues
+- Provides version/milestone context at no extra API cost
+- Can display version name alongside timeline (e.g., "Fix auth bug [v2.1] | 3.5/8h...")
+- No extra API calls needed - already in response
+- Consider for UI polish phase
 
 **CRITICAL DISTINCTIONS** (from API analysis):
 - **`spent_hours`**: Time logged on THIS issue only (excludes subtasks)
@@ -772,9 +779,13 @@ Command palette shortcut that remembers last issue and activity for rapid re-log
 2. **Project-specific activities**: `GET /projects/{id}.json?include=time_entry_activities`
    - Required for projects with restricted activities ([#18095](https://www.redmine.org/issues/18095))
    - Available since Redmine 3.4.0
-   - Returns project's allowed activities
+   - Returns project's allowed activities (AUTHORITATIVE for that project)
 
-**IMPLEMENTATION**: Fetch both system + project activities, merge for complete list
+**IMPLEMENTATION STRATEGY** (⚠️ CANNOT NAIVELY MERGE):
+- **For project-specific logging**: Use project activities endpoint (authoritative)
+- **For non-project contexts**: Use system-level activities as fallback
+- **Risk**: Activity IDs may conflict between sources; project-specific IDs take precedence
+- **Authority rule**: When logging to specific project, MUST use project's activity list
 
 Request body:
 ```json
@@ -1198,9 +1209,11 @@ Based on comprehensive analysis of all 22 Redmine REST API endpoints:
 **4. Issue Picker with Search** (`GET /issues.json` with subject filter)
 - **Use case**: Quick issue lookup in time logging UI
 - **Recommended approach**: Use `/issues.json?f[]=subject&op[subject]=~&v[subject][]=<query>`
+- **⚠️ RISK**: Subject filtering **works but is UNDOCUMENTED** ([#13347](https://www.redmine.org/issues/13347))
+- **Not officially supported**: May break in future Redmine versions without warning
 - **Why not /search.xml**: XML-only (no JSON), returns minimal data
 - **Performance**: Max 100 results, supports wildcards
-- **Effort**: 2-3h (enhancement to MVP-3)
+- **Effort**: 2-3h (enhancement to MVP-3) + risk mitigation strategy
 
 **5. Version/Milestone Planning** (`GET /projects/{id}/versions`)
 - **Use case**: Group workload by version/milestone
@@ -1234,7 +1247,8 @@ Based on analysis, these APIs have **no connection** to time tracking or issue m
 
 **Pagination Limits**:
 - Default: 25 items per request
-- Maximum: 100 items per request (admin configurable, not hardcoded)
+- Maximum: 100 items per request (**hardcoded**, not configurable)
+- **Note**: Feature requests (#16069, #25555, #33526) exist to make this configurable but remain unimplemented
 - Large datasets require offset/limit loops
 
 **Caching Recommendations**:
