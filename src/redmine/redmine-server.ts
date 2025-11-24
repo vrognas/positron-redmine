@@ -309,7 +309,7 @@ export class RedmineServer {
     from?: string;
     to?: string;
   }): Promise<{ time_entries: TimeEntry[] }> {
-    const queryParams = new URLSearchParams({ user_id: "me" });
+    const queryParams = new URLSearchParams({ user_id: "me", include: "issue" });
 
     if (params?.from) {
       queryParams.set("from", params.from);
