@@ -112,15 +112,23 @@ export async function quickLogTime(
     const hours = parseTimeInput(hoursInput)!; // Already validated
     const hoursStr = hours.toString();
 
-    // 4. Post time entry
+    // 4. Input comment (optional)
+    const comment = await vscode.window.showInputBox({
+      prompt: `Comment for #${selection.issueId} (optional)`,
+      placeHolder: "e.g., Implemented feature X",
+    });
+
+    if (comment === undefined) return; // User cancelled
+
+    // 5. Post time entry
     await props.server.addTimeEntry(
       selection.issueId,
       selection.activityId,
       hoursStr,
-      "" // No comment for quick logging
+      comment || "" // Empty string if no comment
     );
 
-    // 5. Update cache
+    // 6. Update cache
     await context.globalState.update("lastTimeLog", {
       issueId: selection.issueId,
       issueSubject: selection.issueSubject,
@@ -129,7 +137,7 @@ export async function quickLogTime(
       lastLogged: new Date(),
     });
 
-    // 6. Confirm with status bar flash (NOT notification)
+    // 7. Confirm with status bar flash (NOT notification)
     const statusBar = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left
     );

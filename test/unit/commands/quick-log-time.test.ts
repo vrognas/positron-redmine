@@ -63,7 +63,9 @@ describe("quickLogTime", () => {
         value: "recent",
       } as unknown as vscode.QuickPickItem);
 
-    vi.spyOn(vscode.window, "showInputBox").mockResolvedValueOnce("2.5");
+    (vscode.window.showInputBox as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("2.5") // hours
+      .mockResolvedValueOnce("Test comment"); // comment
 
     await quickLogTime(props, mockContext);
 
@@ -98,13 +100,16 @@ describe("quickLogTime", () => {
         activity: { id: 9, name: "Development" },
       } as unknown as vscode.QuickPickItem);
 
-    const showInputBoxSpy = vi
-      .spyOn(vscode.window, "showInputBox")
-      .mockResolvedValueOnce("2.5");
+    (vscode.window.showInputBox as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("2.5") // hours
+      .mockResolvedValueOnce(""); // comment (empty)
 
     await quickLogTime(props, mockContext);
 
-    const inputValidator = showInputBoxSpy.mock.calls[0][0]
+    const showInputBoxMock = vscode.window.showInputBox as ReturnType<
+      typeof vi.fn
+    >;
+    const inputValidator = showInputBoxMock.mock.calls[0][0]
       .validateInput as (value: string) => string | null;
 
     // Invalid: out of range or bad format
@@ -131,6 +136,9 @@ describe("quickLogTime", () => {
   });
 
   it("calls API and updates cache after logging", async () => {
+    // Clear mock before setting up new return values
+    (vscode.window.showInputBox as ReturnType<typeof vi.fn>).mockClear();
+
     // Mock globalState: undefined for lastTimeLog, empty array for recentIssueIds
     mockContext.globalState.get = vi.fn((key: string) => {
       if (key === "recentIssueIds") return [];
@@ -156,11 +164,13 @@ describe("quickLogTime", () => {
         activity: { id: 9, name: "Development" },
       } as unknown as vscode.QuickPickItem);
 
-    vi.spyOn(vscode.window, "showInputBox").mockResolvedValueOnce("2.5");
+    (vscode.window.showInputBox as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("2.5") // hours
+      .mockResolvedValueOnce(""); // comment (user leaves empty)
 
     await quickLogTime(props, mockContext);
 
-    // Verify API called with correct params
+    // Verify API called with correct params (comment is empty)
     expect(mockServer.addTimeEntry).toHaveBeenCalledWith(123, 9, "2.5", "");
 
     // Verify cache updated
