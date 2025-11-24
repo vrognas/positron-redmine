@@ -73,31 +73,22 @@ export class MyTimeEntriesTreeDataProvider
         const weekTotal = calculateTotal(weekResult.time_entries);
         const monthTotal = calculateTotal(monthResult.time_entries);
 
-        // Get working hours config
+        // Get working hours config (supports both old and new format)
         const config = vscode.workspace.getConfiguration("redmine.workingHours");
-        const hoursPerDay = config.get<number>("hoursPerDay", 8);
-        const workingDays = config.get<string[]>("workingDays", [
-          "Mon",
-          "Tue",
-          "Wed",
-          "Thu",
-          "Fri",
-        ]);
+        const schedule = getWeeklySchedule(config);
 
         // Calculate available hours for each period
-        const todayAvailable = isWorkingDay(new Date(), workingDays)
-          ? hoursPerDay
-          : 0;
-        const weekAvailable = countWorkingDays(
+        const todayAvailable = getHoursForDate(new Date(), schedule);
+        const weekAvailable = calculateAvailableHours(
           new Date(weekStart),
           new Date(today),
-          workingDays
-        ) * hoursPerDay;
-        const monthAvailable = countWorkingDays(
+          schedule
+        );
+        const monthAvailable = calculateAvailableHours(
           new Date(monthStart),
           new Date(today),
-          workingDays
-        ) * hoursPerDay;
+          schedule
+        );
 
         return [
           {
@@ -204,25 +195,71 @@ function formatHoursWithComparison(
   return `${formatHours(logged)}/${formatHours(available)} (${percentage}%)`;
 }
 
-function isWorkingDay(date: Date, workingDays: string[]): boolean {
-  const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
-  return workingDays.includes(dayName);
+type WeeklySchedule = Record<string, number>;
+
+/**
+ * Get weekly schedule from config, supporting both old and new format
+ */
+function getWeeklySchedule(
+  config: vscode.WorkspaceConfiguration
+): WeeklySchedule {
+  // Try new format first
+  const schedule = config.get<WeeklySchedule>("weeklySchedule");
+  if (schedule) {
+    return schedule;
+  }
+
+  // Fallback to old format (backward compatibility)
+  const hoursPerDay = config.get<number>("hoursPerDay", 8);
+  const workingDays = config.get<string[]>("workingDays", [
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+  ]);
+
+  // Convert old format to new format
+  const defaultSchedule: WeeklySchedule = {
+    Mon: 0,
+    Tue: 0,
+    Wed: 0,
+    Thu: 0,
+    Fri: 0,
+    Sat: 0,
+    Sun: 0,
+  };
+
+  workingDays.forEach((day) => {
+    defaultSchedule[day] = hoursPerDay;
+  });
+
+  return defaultSchedule;
 }
 
-function countWorkingDays(
+/**
+ * Get working hours for a specific date
+ */
+function getHoursForDate(date: Date, schedule: WeeklySchedule): number {
+  const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+  return schedule[dayName] || 0;
+}
+
+/**
+ * Calculate total available hours between two dates
+ */
+function calculateAvailableHours(
   start: Date,
   end: Date,
-  workingDays: string[]
+  schedule: WeeklySchedule
 ): number {
-  let count = 0;
+  let total = 0;
   const current = new Date(start);
 
   while (current <= end) {
-    if (isWorkingDay(current, workingDays)) {
-      count++;
-    }
+    total += getHoursForDate(current, schedule);
     current.setDate(current.getDate() + 1);
   }
 
-  return count;
+  return total;
 }

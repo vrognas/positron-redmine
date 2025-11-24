@@ -278,7 +278,8 @@
           "minimum": 1,
           "maximum": 16,
           "scope": "application",
-          "markdownDescription": "**Daily working hours** for time entry calculations\n\nUsed to calculate utilization percentages in time entry view."
+          "markdownDescription": "**DEPRECATED:** Use `#redmine.workingHours.weeklySchedule#` instead.\n\nDaily working hours for time entry calculations.",
+          "deprecationMessage": "Use redmine.workingHours.weeklySchedule to set hours per day of week"
         },
         "redmine.workingHours.workingDays": {
           "type": "array",
@@ -291,7 +292,32 @@
           "maxItems": 7,
           "uniqueItems": true,
           "scope": "application",
-          "markdownDescription": "**Working days** for time entry calculations\n\nUsed to calculate available hours for utilization percentages."
+          "markdownDescription": "**DEPRECATED:** Use `#redmine.workingHours.weeklySchedule#` instead.\n\nWorking days for time entry calculations.",
+          "deprecationMessage": "Use redmine.workingHours.weeklySchedule to set hours per day of week"
+        },
+        "redmine.workingHours.weeklySchedule": {
+          "type": "object",
+          "default": {
+            "Mon": 8,
+            "Tue": 8,
+            "Wed": 8,
+            "Thu": 8,
+            "Fri": 8,
+            "Sat": 0,
+            "Sun": 0
+          },
+          "properties": {
+            "Mon": { "type": "number", "minimum": 0, "maximum": 24 },
+            "Tue": { "type": "number", "minimum": 0, "maximum": 24 },
+            "Wed": { "type": "number", "minimum": 0, "maximum": 24 },
+            "Thu": { "type": "number", "minimum": 0, "maximum": 24 },
+            "Fri": { "type": "number", "minimum": 0, "maximum": 24 },
+            "Sat": { "type": "number", "minimum": 0, "maximum": 24 },
+            "Sun": { "type": "number", "minimum": 0, "maximum": 24 }
+          },
+          "additionalProperties": false,
+          "scope": "application",
+          "markdownDescription": "**Weekly working hours schedule**\n\nSet working hours for each day of the week (0-24h). Use 0 for non-working days.\n\n**Example schedules:**\n- Standard 5-day week: Mon-Fri = 8h, Sat-Sun = 0h\n- 4-day week: Mon-Thu = 10h, Fri-Sun = 0h\n- Part-time Friday: Mon-Thu = 8h, Fri = 4h, Sat-Sun = 0h\n\nUsed to calculate utilization percentages in time entry view."
         }
       }
     }

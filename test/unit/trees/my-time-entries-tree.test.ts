@@ -19,9 +19,17 @@ describe("MyTimeEntriesTreeDataProvider", () => {
     // Mock workspace.getConfiguration to return working hours config
     vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
       get: vi.fn((key: string, defaultValue?: unknown) => {
-        if (key === "hoursPerDay") return 8;
-        if (key === "workingDays")
-          return ["Mon", "Tue", "Wed", "Thu", "Fri"];
+        if (key === "weeklySchedule") {
+          return {
+            Mon: 8,
+            Tue: 8,
+            Wed: 8,
+            Thu: 8,
+            Fri: 8,
+            Sat: 0,
+            Sun: 0,
+          };
+        }
         return defaultValue;
       }),
       update: vi.fn(),
