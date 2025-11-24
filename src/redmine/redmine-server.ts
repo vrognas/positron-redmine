@@ -245,8 +245,8 @@ export class RedmineServer {
       }>(`/projects.json?limit=${limit}&offset=${offset}`, "GET");
 
       const [totalCount, result]: [number, RedmineProject[]] = [
-        response.total_count,
-        (response.projects || []).map(
+        response?.total_count || 0,
+        (response?.projects || []).map(
           (proj) =>
             new RedmineProject({
               ...proj,
@@ -379,14 +379,14 @@ export class RedmineServer {
 
   async getIssueStatusesTyped(): Promise<IssueStatus[]> {
     const statuses = await this.getIssueStatuses();
-    return (statuses.issue_statuses || []).map((s) => new IssueStatus(s.id, s.name));
+    return (statuses?.issue_statuses || []).map((s) => new IssueStatus(s.id, s.name));
   }
   async getMemberships(projectId: number): Promise<Membership[]> {
     const membershipsResponse = await this.doRequest<{
       memberships: RedmineMembership[];
     }>(`/projects/${projectId}/memberships.json`, "GET");
 
-    return (membershipsResponse.memberships || []).map((m) =>
+    return (membershipsResponse?.memberships || []).map((m) =>
       "user" in m
         ? new Membership(m.user.id, m.user.name)
         : new Membership(m.group.id, m.group.name, false)
@@ -441,8 +441,8 @@ export class RedmineServer {
       );
 
       const [totalCount, result]: [number, Issue[]] = [
-        response.total_count,
-        response.issues || [],
+        response?.total_count || 0,
+        response?.issues || [],
       ];
 
       return req(offset + limit, limit, totalCount, accumulator.concat(result));
@@ -479,8 +479,8 @@ export class RedmineServer {
       }>(`${baseUrl}&limit=${limit}&offset=${offset}`, "GET");
 
       const [totalCount, result]: [number, Issue[]] = [
-        response.total_count,
-        response.issues || [],
+        response?.total_count || 0,
+        response?.issues || [],
       ];
 
       return req(offset + limit, limit, totalCount, accumulator.concat(result));
