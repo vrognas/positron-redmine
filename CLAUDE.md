@@ -23,3 +23,4 @@
 - Write concise commit messages that clearly describe the changes made.
 - For simple queries, use under five tool calls, but for more complex queries you can use up to 15 tool calls.
 - STOP and ask user if you find unexpected issues during implementation (breaking changes, missing dependencies, test failures).
+- When creating PRs, always write your own title and body - do not use repo templates. Use explicit `--title` and `--body` flags with `gh pr create`.
