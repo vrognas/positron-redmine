@@ -13,7 +13,6 @@
 | **MVP-1: Timeline & Progress Display** | P0 | HIGH | MEDIUM | None (uses existing fields) |
 | **MVP-2: Time Entry Viewing** | P0 | HIGH | MEDIUM | New endpoint |
 | **MVP-3: Quick Time Logging** | P1 | MEDIUM | LOW | None (uses existing) |
-| **MVP-4: Workload Overview** | P1 | HIGH | MEDIUM | None (aggregates existing) |
 
 ---
 
@@ -331,122 +330,6 @@ function countWorkingDays(
 
 ---
 
-## MVP-2: Spent Hours Display
-
-### Problem
-Cannot see how much time accumulated on issues. No way to track against estimates or budgets.
-
-### Solution
-Display spent_hours alongside estimated_hours in issue tree items.
-
-### Redmine API Reference
-
-**API endpoint**: Already called (`GET /issues.json`)
-
-**Add query parameter**:
-```
-GET /issues.json?assigned_to_id=me&status_id=open
-```
-
-**Response includes** (Redmine 3.3+):
-```json
-{
-  "issue": {
-    "id": 123,
-    "estimated_hours": 8.0,
-    "spent_hours": 3.5,              // ✅ Time on this issue only
-    "total_estimated_hours": 12.0,   // ✅ Including subtasks
-    "total_spent_hours": 5.5         // ✅ Including subtasks
-  }
-}
-```
-
-**Note**: Fields always present on Redmine 3.3+. No explicit `include` parameter needed.
-
-Source: [Feature #21757](https://www.redmine.org/issues/21757), [Feature #5303](https://www.redmine.org/issues/5303)
-
-### UI Design
-
-**Current display:**
-```
-Fix authentication bug                 #123
-```
-
-**New display (with estimates):**
-```
-Fix authentication bug      3.5/8h 🟢 3d  #123
-Add reporting feature       0/12h  🟡 7d  #456
-Database optimization       8/4h!  🔴 1d  #789  (over budget)
-Client documentation               🟢 5d  #999  (no estimate)
-```
-
-**Format**: `{spent}/{estimated}h`
-- Over budget (spent > estimated): Append `!` and use warning color
-- No estimate: Hide hours display
-- No spent time: Show `0/8h`
-
-### Implementation Plan
-
-1. **Update Model**: `/src/redmine/models/issue.ts`
-   ```typescript
-   export interface Issue {
-     // ... existing fields
-     estimated_hours: number | null;
-     spent_hours?: number;              // Add (optional for backward compat)
-     total_estimated_hours?: number;    // Add
-     total_spent_hours?: number;        // Add
-   }
-   ```
-
-2. **Verify API Response**: Check if current Redmine server (version?) returns these fields
-   - Add logging to see actual response structure
-   - Handle gracefully if fields missing (older Redmine)
-
-3. **Modify**: `/src/utilities/tree-item-factory.ts`
-   - Add `getHoursDisplay(issue: Issue): string` helper
-   - Update description to include hours before risk indicator
-   - Format: `{hours} {risk} #{id}`
-
-4. **Test**: `/test/unit/utilities/tree-item-factory.test.ts`
-   - Test 1: No estimate → no hours display
-   - Test 2: Estimate with no spent → "0/8h"
-   - Test 3: Under budget → "3.5/8h"
-   - Test 4: Over budget → "8/4h!"
-   - Test 5: Missing fields → graceful degradation
-
-5. **Update docs**:
-   - CHANGELOG.md: "feat: display spent/estimated hours"
-   - Bump version: 3.2.0 (same release as MVP-1)
-
-### Edge Cases
-
-| Scenario | Display |
-|----------|---------|
-| No estimated_hours | Hide hours (preserve current) |
-| spent_hours missing (old Redmine) | Hide hours (backward compat) |
-| spent = estimated | "8/8h" (no indicator) |
-| spent > estimated | "9/8h!" (budget warning) |
-| Decimal hours | "3.5/8h" (preserve precision) |
-
-### Compatibility
-
-**Minimum Redmine version**: 3.3.0 (released 2016-09-25)
-- For older versions: Fields won't be present, feature disabled gracefully
-
-### Out of Scope (Future v3)
-
-- Configurable display format
-- Total vs individual hours toggle
-- Budget percentage (75% of 8h)
-- Hours breakdown by user
-
-### Estimated Effort
-- Implementation: ~40 LOC
-- Tests: ~60 LOC
-- Total: 1-2 hours
-
----
-
 ## MVP-2: Time Entry Viewing
 
 ### Problem
@@ -758,7 +641,7 @@ function weekAgo(): string {
 
 ---
 
-## MVP-4: Quick Time Logging
+## MVP-3: Quick Time Logging
 
 ### Problem
 Multi-step workflow for frequent time logging. Consultant logs 5-10x daily, current process too slow.
@@ -819,6 +702,12 @@ Response: {
 No API changes needed.
 
 Source: [Rest TimeEntries](https://www.redmine.org/projects/redmine/wiki/Rest_TimeEntries), [Rest Enumerations](https://www.redmine.org/projects/redmine/wiki/Rest_Enumerations)
+
+**PERMISSION HANDLING**:
+- **No pre-check needed**: Redmine API has no endpoint to check `:log_time` permission without admin access
+- **Strategy**: Attempt time entry creation, handle 403 response gracefully
+- **Error message**: "Cannot log time: You don't have permission in this project. Visit {server}/projects/{project}/settings/members to request access."
+- **Rationale**: REST best practice - let server validate permissions, avoid unnecessary pre-check API calls
 
 ### UX Design
 
@@ -1028,6 +917,26 @@ async function pickIssueAndActivity(server: RedmineServer): Promise<{
 - Implementation: ~150 LOC
 - Tests: ~100 LOC
 - Total: 3-4 hours
+
+---
+
+## MVP-4: Workload Overview
+
+**Status**: Planned for Phase 2 (see MVP_DECISIONS.md)
+
+### Problem
+Cannot assess total capacity or answer "Do I have time for new 8h request?"
+
+### Solution
+Dashboard showing:
+- Total estimated/spent/remaining hours across all assigned issues
+- Available capacity this week (working days × hours/day - remaining work)
+- Top 3 most urgent issues by deadline
+
+### Implementation
+**Deferred**: Will be designed after MVP-1/2/3 implementation and user feedback.
+
+**Estimated Effort**: 4-6 hours
 
 ---
 
