@@ -129,9 +129,9 @@ describe("MyTimeEntriesTreeDataProvider", () => {
     const todayChildren = await provider.getChildren(groups[0]);
 
     expect(todayChildren).toHaveLength(2);
-    expect(todayChildren[0].label).toBe("Test Issue");
+    expect(todayChildren[0].label).toBe("#123 Test Issue");
     expect(todayChildren[0].description).toBe("2.5h Development");
-    expect(todayChildren[1].label).toBe("Another Issue");
+    expect(todayChildren[1].label).toBe("#124 Another Issue");
     expect(todayChildren[1].description).toBe("1.5h Testing");
   });
 

@@ -103,23 +103,35 @@ export class MyTimeEntriesTreeDataProvider
 
     // Child level - time entries (use cached)
     if (element.type === "group" && element._cachedEntries) {
-      return element._cachedEntries.map((entry) => ({
-        label: entry.issue?.subject || `Issue #${entry.issue_id}`,
-        description: `${entry.hours}h ${entry.activity?.name || ""}`,
-        tooltip: new vscode.MarkdownString(
+      return element._cachedEntries.map((entry) => {
+        const tooltip = new vscode.MarkdownString(
           `**Time Entry #${entry.id}**\n\n` +
-            `**Issue:** #${entry.issue_id} ${entry.issue?.subject || ""}\n` +
-            `**Hours:** ${entry.hours}h\n` +
-            `**Activity:** ${entry.activity?.name || "Unknown"}\n` +
-            `**Date:** ${entry.spent_on}\n` +
-            `**Comments:** ${entry.comments || "None"}\n\n` +
-            `[View Issue in Redmine](${this.server?.options.address}/issues/${entry.issue_id})`
-        ),
-        collapsibleState: vscode.TreeItemCollapsibleState.None,
-        type: "entry",
-        contextValue: "time-entry",
-        _entry: entry,
-      }));
+            `**Issue**\n\n` +
+            `#${entry.issue?.id || entry.issue_id} ${entry.issue?.subject || "Untitled"}\n\n` +
+            `**Hours**\n\n` +
+            `${entry.hours}h\n\n` +
+            `**Activity**\n\n` +
+            `${entry.activity?.name || "Unknown"}\n\n` +
+            `**Date**\n\n` +
+            `${entry.spent_on}\n\n` +
+            `**Comments**\n\n` +
+            `${entry.comments || "None"}\n\n` +
+            `---\n\n` +
+            `[Open Issue in Browser](${this.server?.options.address}/issues/${entry.issue?.id || entry.issue_id})`
+        );
+        // Enable command URIs for external links
+        tooltip.isTrusted = true;
+
+        return {
+          label: `#${entry.issue?.id || entry.issue_id} ${entry.issue?.subject || "Untitled"}`,
+          description: `${entry.hours}h ${entry.activity?.name || ""}`,
+          tooltip,
+          collapsibleState: vscode.TreeItemCollapsibleState.None,
+          type: "entry",
+          contextValue: "time-entry",
+          _entry: entry,
+        };
+      });
     }
 
     return [];
