@@ -464,18 +464,22 @@ New tree view "My Time Entries" showing logged time grouped by date with totals.
 - **Must group client-side**: By date, project, or activity
 - **Pagination**: Default 25/request, max 100 (configurable by admin)
 
-**⚠️ user_id=me CAVEAT**:
-- Works in practice but **UNDOCUMENTED** in official API
-- May break in future Redmine versions without notice
-- **Fallback**: Fetch user ID via `GET /users/current.json` first if needed
+**🔴 user_id Parameter** (CRITICAL):
+- **user_id=me DOES NOT WORK** - Feature #12763 confirms failure
+- **Must use numeric user ID**: Fetch via `GET /users/current.json` first
+- **Implementation**:
+  1. Call `/users/current.json` to get user ID
+  2. Use numeric ID in `/time_entries.json?user_id={id}`
+- Unlike Issues API, Time Entries does not support "me" keyword
 
 **Query parameters**:
 ```
-GET /time_entries.json?user_id=me&from=2025-11-20&to=2025-11-23&limit=100
+GET /time_entries.json?user_id={numeric_id}&from=2025-11-20&to=2025-11-23&limit=100
 ```
+**Note**: Replace `{numeric_id}` with actual user ID from `/users/current.json`
 
 **Supported filters**:
-- `user_id` - Filter by user (use `me` for current user)
+- `user_id` - Filter by user (**numeric ID only**, "me" does not work)
 - `from` - Date range start (YYYY-MM-DD)
 - `to` - Date range end (YYYY-MM-DD)
 - `spent_on` - Specific date (YYYY-MM-DD)
@@ -1210,7 +1214,9 @@ Based on comprehensive analysis of all 22 Redmine REST API endpoints:
 - **Use case**: Quick issue lookup in time logging UI
 - **Recommended approach**: Use `/issues.json?f[]=subject&op[subject]=~&v[subject][]=<query>`
 - **⚠️ RISK**: Subject filtering **works but is UNDOCUMENTED** ([#13347](https://www.redmine.org/issues/13347))
+- **Evidence**: Proven working in Redmine 3.4.1+, 4.0.4 (redmine-java-api lib, multiple user confirmations)
 - **Not officially supported**: May break in future Redmine versions without warning
+- **Operator**: `op[subject]=~` is "contains" operator, `%` works as wildcard
 - **Why not /search.xml**: XML-only (no JSON), returns minimal data
 - **Performance**: Max 100 results, supports wildcards
 - **Effort**: 2-3h (enhancement to MVP-3) + risk mitigation strategy
