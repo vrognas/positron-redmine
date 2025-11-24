@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 describe("MyTimeEntriesTreeDataProvider", () => {
   let mockServer: {
     getTimeEntries: ReturnType<typeof vi.fn>;
+    getIssueById: ReturnType<typeof vi.fn>;
     options: { address: string };
   };
   let provider: MyTimeEntriesTreeDataProvider;
@@ -13,6 +14,12 @@ describe("MyTimeEntriesTreeDataProvider", () => {
   beforeEach(() => {
     mockServer = {
       getTimeEntries: vi.fn(),
+      getIssueById: vi.fn().mockImplementation((id: number) => {
+        // Default mock: return issue with subject based on ID
+        return Promise.resolve({
+          issue: { id, subject: `Test Issue ${id}` },
+        });
+      }),
       options: { address: "https://redmine.example.com" },
     };
 
@@ -71,7 +78,6 @@ describe("MyTimeEntriesTreeDataProvider", () => {
       {
         id: 1,
         issue_id: 123,
-        issue: { id: 123, subject: "Test Issue" },
         activity_id: 9,
         activity: { id: 9, name: "Development" },
         hours: "2.5",
@@ -85,7 +91,6 @@ describe("MyTimeEntriesTreeDataProvider", () => {
       {
         id: 2,
         issue_id: 124,
-        issue: { id: 124, subject: "Another Issue" },
         activity_id: 10,
         activity: { id: 10, name: "Testing" },
         hours: "1.5",
@@ -120,7 +125,6 @@ describe("MyTimeEntriesTreeDataProvider", () => {
       {
         id: 1,
         issue_id: 123,
-        issue: { id: 123, subject: "Test Issue" },
         activity_id: 9,
         activity: { id: 9, name: "Development" },
         hours: "2.5",
@@ -130,7 +134,6 @@ describe("MyTimeEntriesTreeDataProvider", () => {
       {
         id: 2,
         issue_id: 124,
-        issue: { id: 124, subject: "Another Issue" },
         activity_id: 10,
         activity: { id: 10, name: "Testing" },
         hours: "1.5",
@@ -148,9 +151,9 @@ describe("MyTimeEntriesTreeDataProvider", () => {
     const todayChildren = await provider.getChildren(groups[0]);
 
     expect(todayChildren).toHaveLength(2);
-    expect(todayChildren[0].label).toBe("#123 Test Issue");
+    expect(todayChildren[0].label).toBe("#123 Test Issue 123");
     expect(todayChildren[0].description).toBe("2.5h Development");
-    expect(todayChildren[1].label).toBe("#124 Another Issue");
+    expect(todayChildren[1].label).toBe("#124 Test Issue 124");
     expect(todayChildren[1].description).toBe("1.5h Testing");
   });
 
@@ -159,7 +162,6 @@ describe("MyTimeEntriesTreeDataProvider", () => {
       {
         id: 1,
         issue_id: 123,
-        issue: { id: 123, subject: "Test Issue" },
         activity_id: 9,
         activity: { id: 9, name: "Development" },
         hours: "2.5",
@@ -169,7 +171,6 @@ describe("MyTimeEntriesTreeDataProvider", () => {
       {
         id: 2,
         issue_id: 124,
-        issue: { id: 124, subject: "Another Issue" },
         activity_id: 10,
         activity: { id: 10, name: "Testing" },
         hours: "1.5",
@@ -213,7 +214,6 @@ describe("MyTimeEntriesTreeDataProvider", () => {
       {
         id: 1,
         issue_id: 123,
-        issue: { id: 123, subject: "Test Issue" },
         activity_id: 9,
         activity: { id: 9, name: "Development" },
         hours: "2.5",
@@ -240,5 +240,127 @@ describe("MyTimeEntriesTreeDataProvider", () => {
     provider.refresh();
 
     expect(eventSpy).toHaveBeenCalledWith(undefined);
+  });
+
+  it("fetches issue details from API when not in time entry", async () => {
+    const todayEntries: TimeEntry[] = [
+      {
+        id: 1,
+        issue_id: 123,
+        activity_id: 9,
+        activity: { id: 9, name: "Development" },
+        hours: "2.5",
+        comments: "Test comment",
+        spent_on: "2025-11-24",
+      },
+    ];
+
+    mockServer.getTimeEntries
+      .mockResolvedValueOnce({ time_entries: todayEntries })
+      .mockResolvedValueOnce({ time_entries: [] })
+      .mockResolvedValueOnce({ time_entries: [] });
+
+    mockServer.getIssueById.mockResolvedValue({
+      issue: { id: 123, subject: "Fetched Issue Subject" },
+    });
+
+    const groups = await provider.getChildren();
+    const todayChildren = await provider.getChildren(groups[0]);
+
+    expect(todayChildren).toHaveLength(1);
+    expect(todayChildren[0].label).toBe("#123 Fetched Issue Subject");
+    expect(mockServer.getIssueById).toHaveBeenCalledWith(123);
+  });
+
+  it("caches fetched issues to avoid redundant API calls", async () => {
+    const todayEntries: TimeEntry[] = [
+      {
+        id: 1,
+        issue_id: 123,
+        activity_id: 9,
+        activity: { id: 9, name: "Development" },
+        hours: "2.5",
+        comments: "",
+        spent_on: "2025-11-24",
+      },
+    ];
+
+    mockServer.getTimeEntries
+      .mockResolvedValueOnce({ time_entries: todayEntries })
+      .mockResolvedValueOnce({ time_entries: todayEntries })
+      .mockResolvedValueOnce({ time_entries: [] });
+
+    mockServer.getIssueById.mockResolvedValue({
+      issue: { id: 123, subject: "Cached Issue" },
+    });
+
+    const groups = await provider.getChildren();
+
+    // First expansion - should fetch issue
+    await provider.getChildren(groups[0]);
+    expect(mockServer.getIssueById).toHaveBeenCalledTimes(1);
+
+    // Second expansion (This Week) - should use cache
+    await provider.getChildren(groups[1]);
+    expect(mockServer.getIssueById).toHaveBeenCalledTimes(1); // Still 1, not 2
+  });
+
+  it("clears issue cache on refresh", async () => {
+    const todayEntries: TimeEntry[] = [
+      {
+        id: 1,
+        issue_id: 123,
+        activity_id: 9,
+        activity: { id: 9, name: "Development" },
+        hours: "2.5",
+        comments: "",
+        spent_on: "2025-11-24",
+      },
+    ];
+
+    mockServer.getTimeEntries
+      .mockResolvedValue({ time_entries: todayEntries });
+
+    mockServer.getIssueById.mockResolvedValue({
+      issue: { id: 123, subject: "Fresh Issue" },
+    });
+
+    const groups = await provider.getChildren();
+    await provider.getChildren(groups[0]);
+    expect(mockServer.getIssueById).toHaveBeenCalledTimes(1);
+
+    // Refresh should clear cache
+    provider.refresh();
+
+    const newGroups = await provider.getChildren();
+    await provider.getChildren(newGroups[0]);
+    expect(mockServer.getIssueById).toHaveBeenCalledTimes(2); // Fetched again
+  });
+
+  it("handles issue fetch failures gracefully", async () => {
+    const todayEntries: TimeEntry[] = [
+      {
+        id: 1,
+        issue_id: 999,
+        activity_id: 9,
+        activity: { id: 9, name: "Development" },
+        hours: "2.5",
+        comments: "",
+        spent_on: "2025-11-24",
+      },
+    ];
+
+    mockServer.getTimeEntries
+      .mockResolvedValueOnce({ time_entries: todayEntries })
+      .mockResolvedValueOnce({ time_entries: [] })
+      .mockResolvedValueOnce({ time_entries: [] });
+
+    mockServer.getIssueById.mockRejectedValue(new Error("Issue not found"));
+
+    const groups = await provider.getChildren();
+    const todayChildren = await provider.getChildren(groups[0]);
+
+    expect(todayChildren).toHaveLength(1);
+    expect(todayChildren[0].label).toBe("#999 Unknown Issue");
   });
 });

@@ -24,14 +24,19 @@ export class MyTimeEntriesTreeDataProvider
 
   private isLoading = false;
   private server?: RedmineServer;
+  private issueCache = new Map<number, { id: number; subject: string }>();
 
   constructor() {}
 
   setServer(server: RedmineServer | undefined): void {
     this.server = server;
+    // Clear cache when server changes
+    this.issueCache.clear();
   }
 
   refresh(): void {
+    // Clear cache on refresh to get fresh data
+    this.issueCache.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -120,9 +125,41 @@ export class MyTimeEntriesTreeDataProvider
 
     // Child level - time entries (use cached)
     if (element.type === "group" && element._cachedEntries) {
+      // Collect unique issue IDs that need fetching
+      const uniqueIssueIds = Array.from(
+        new Set(
+          element._cachedEntries.map(
+            (entry) => entry.issue?.id || entry.issue_id
+          )
+        )
+      );
+
+      // Filter out already-cached issues
+      const missingIssueIds = uniqueIssueIds.filter(
+        (id) => !this.issueCache.has(id)
+      );
+
+      // Batch fetch missing issues
+      if (missingIssueIds.length > 0 && this.server) {
+        await Promise.allSettled(
+          missingIssueIds.map(async (id) => {
+            try {
+              const { issue } = await this.server!.getIssueById(id);
+              this.issueCache.set(id, { id: issue.id, subject: issue.subject });
+            } catch {
+              // If fetch fails, cache as "Unknown Issue" to avoid retry
+              this.issueCache.set(id, { id, subject: "Unknown Issue" });
+            }
+          })
+        );
+      }
+
+      // Map entries using cached issue subjects
       return element._cachedEntries.map((entry) => {
         const issueId = entry.issue?.id || entry.issue_id;
-        const issueSubject = entry.issue?.subject || "Unknown Issue";
+        const cached = this.issueCache.get(issueId);
+        const issueSubject = cached?.subject || "Unknown Issue";
+
         const tooltip = new vscode.MarkdownString(
           `**Issue:** #${issueId} ${issueSubject}\n\n` +
             `**Hours:** ${entry.hours}h\n\n` +
