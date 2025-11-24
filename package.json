@@ -373,7 +373,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "ci": "npm run lint && npm run typecheck && npm run test:coverage",
-    "install-hooks": "bash scripts/install-hooks.sh"
+    "install-hooks": "bash scripts/install-hooks.sh",
+    "prepare": "bash scripts/install-hooks.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

@@ -4,15 +4,15 @@
 
 set -e
 
-# Get the repository root
-REPO_ROOT=$(git rev-parse --show-toplevel)
+# Get the repository root (exit silently if not a git repo)
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+
 HOOKS_DIR="$REPO_ROOT/.git/hooks"
 SCRIPTS_DIR="$REPO_ROOT/scripts"
 
-# Check if .git directory exists
+# Skip if .git doesn't exist (CI environment)
 if [ ! -d "$REPO_ROOT/.git" ]; then
-  echo "ERROR: Not a git repository"
-  exit 1
+  exit 0
 fi
 
 # Install commit-msg hook
