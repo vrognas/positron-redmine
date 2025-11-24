@@ -1,7 +1,7 @@
 # Phased Implementation Plan - Redmine VSCode Extension MVPs
 
 **Date**: 2025-11-24
-**Status**: Ready for implementation
+**Status**: MVP-3 Complete ✅ - Moving to MVP-2
 **Compliance**: A (91/100) - All critical issues resolved
 
 ---
@@ -12,14 +12,14 @@
 
 4 MVPs addressing consultant workflow gaps, totaling **26-40h** (3-5 days)
 
-| MVP | Priority | Effort | Start | Description |
-|-----|----------|--------|-------|-------------|
-| **MVP-3** | P1 | 3-4h | ⭐ **START** | Quick Time Logging (Ctrl+K Ctrl+L) |
-| **MVP-2** | P0 | 5-7h | Phase 2 | Time Entry Viewing (tree view) |
-| **MVP-1** | P0 | 9-11h | Phase 3 | Timeline & Progress Display (flexibility scores) |
-| **MVP-4** | P1 | 2-3h | Phase 4 | Workload Overview (status bar) |
+| MVP | Priority | Effort | Status | Description |
+|-----|----------|--------|--------|-------------|
+| **MVP-3** | P1 | 3-4h | ✅ **COMPLETE** | Quick Time Logging (Ctrl+Y Ctrl+Y) |
+| **MVP-2** | P0 | 5-7h | ⭐ **NEXT** | Time Entry Viewing (tree view) |
+| **MVP-1** | P0 | 9-11h | Pending | Timeline & Progress Display (flexibility scores) |
+| **MVP-4** | P1 | 2-3h | Pending | Workload Overview (status bar) |
 
-**Implementation Order**: MVP-3 → MVP-2 → MVP-1 → MVP-4
+**Implementation Order**: MVP-3 ✅ → MVP-2 → MVP-1 → MVP-4
 **Rationale**: Simple→Complex, de-risk patterns early
 
 ### Validation Status
@@ -52,8 +52,8 @@
 ### Validation Findings (Fixed)
 
 #### 1. Keybinding Conflict
-**Problem**: `Ctrl+K Ctrl+T` conflicts with VSCode Color Theme picker
-**Fix**: ✅ Changed to `Ctrl+K Ctrl+L` (L for "Log time")
+**Problem**: `Ctrl+K Ctrl+T` conflicts with VSCode Color Theme picker, `Ctrl+K Ctrl+L` conflicts with Toggle Fold
+**Fix**: ✅ Changed to `Ctrl+Y Ctrl+Y` (double-press for safety)
 
 #### 2. MVP-1 Lazy Calculation Freeze
 **Problem**: Calculating flexibility in `getTreeItem()` = 200+ API calls per refresh
