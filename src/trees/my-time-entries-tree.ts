@@ -181,6 +181,8 @@ export class MyTimeEntriesTreeDataProvider
         const cached = this.issueCache.get(issueId);
         const issueSubject = cached?.subject || "Unknown Issue";
 
+        // Encode command arguments as JSON array for VS Code command URI
+        const commandArgs = encodeURIComponent(JSON.stringify([issueId]));
         const tooltip = new vscode.MarkdownString(
           `**Issue:** #${issueId} ${issueSubject}\n\n` +
             `**Hours:** ${entry.hours}h\n\n` +
@@ -188,7 +190,7 @@ export class MyTimeEntriesTreeDataProvider
             `**Date:** ${entry.spent_on}\n\n` +
             `**Comments:** ${entry.comments || "(none)"}\n\n` +
             `---\n\n` +
-            `[Open Issue in Browser](command:redmine.openTimeEntryInBrowser?${issueId})`
+            `[Open Issue in Browser](command:redmine.openTimeEntryInBrowser?${commandArgs})`
         );
         tooltip.isTrusted = true;
         tooltip.supportHtml = false;

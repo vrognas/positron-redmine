@@ -569,8 +569,16 @@ export function activate(context: vscode.ExtensionContext): void {
       const params = args[0] as { issue_id: number };
       issueId = params.issue_id;
     }
+    // Handle string that needs parsing
+    else if (typeof args[0] === 'string') {
+      const parsed = parseInt(args[0], 10);
+      if (!isNaN(parsed)) {
+        issueId = parsed;
+      }
+    }
 
     if (!issueId) {
+      console.error('openTimeEntryInBrowser called with unrecognized args:', args);
       vscode.window.showErrorMessage('Could not determine issue ID');
       return;
     }
