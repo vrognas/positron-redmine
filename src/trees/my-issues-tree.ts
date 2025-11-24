@@ -37,6 +37,7 @@ export class MyIssuesTree implements vscode.TreeDataProvider<TreeItem> {
   server?: RedmineServer;
   private isLoading = false;
   private flexibilityCache = new Map<number, FlexibilityScore | null>();
+  private cachedIssues: Issue[] = [];
   private configListener: vscode.Disposable | undefined;
 
   constructor() {
@@ -97,7 +98,7 @@ export class MyIssuesTree implements vscode.TreeDataProvider<TreeItem> {
       }
 
       // Sort by risk priority (overbooked first, then at-risk, etc.)
-      return result.issues.sort((a, b) => {
+      this.cachedIssues = result.issues.sort((a, b) => {
         const flexA = this.flexibilityCache.get(a.id);
         const flexB = this.flexibilityCache.get(b.id);
 
@@ -113,9 +114,17 @@ export class MyIssuesTree implements vscode.TreeDataProvider<TreeItem> {
         // Within same status, sort by remaining flexibility (lower = more urgent)
         return flexA.remaining - flexB.remaining;
       });
+      return this.cachedIssues;
     } finally {
       this.isLoading = false;
     }
+  }
+
+  /**
+   * Get cached issues for workload calculation
+   */
+  getIssues(): Issue[] {
+    return this.cachedIssues;
   }
 
   private getScheduleConfig(): WeeklySchedule {
@@ -126,5 +135,6 @@ export class MyIssuesTree implements vscode.TreeDataProvider<TreeItem> {
   setServer(server: RedmineServer | undefined) {
     this.server = server;
     this.flexibilityCache.clear();
+    this.cachedIssues = [];
   }
 }

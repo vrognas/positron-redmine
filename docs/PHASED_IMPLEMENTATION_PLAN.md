@@ -1,7 +1,7 @@
 # Phased Implementation Plan - Redmine VSCode Extension MVPs
 
 **Date**: 2025-11-24
-**Status**: MVP-1 Complete ✅ (v3.3.0) - Moving to MVP-4
+**Status**: All MVPs Complete ✅ (v3.4.0)
 **Compliance**: A (91/100) - All critical issues resolved
 
 ---
@@ -17,9 +17,9 @@
 | **MVP-3** | P1 | 3-4h | ✅ **COMPLETE** | Quick Time Logging (Ctrl+Y Ctrl+Y) |
 | **MVP-2** | P0 | 5-7h | ✅ **COMPLETE** | Time Entry Viewing (tree view) |
 | **MVP-1** | P0 | 9-11h | ✅ **COMPLETE** | Timeline & Progress Display (flexibility scores) |
-| **MVP-4** | P1 | 2-3h | ⭐ **NEXT** | Workload Overview (status bar) |
+| **MVP-4** | P1 | 2-3h | ✅ **COMPLETE** | Workload Overview (status bar) |
 
-**Implementation Order**: MVP-3 ✅ → MVP-2 ✅ → MVP-1 ✅ → MVP-4
+**Implementation Order**: MVP-3 ✅ → MVP-2 ✅ → MVP-1 ✅ → MVP-4 ✅
 **Rationale**: Simple→Complex, de-risk patterns early
 
 ### Validation Status
@@ -1411,14 +1411,28 @@ describe('calculateWorkload', () => {
 
 ### Success Criteria
 
-- [ ] Status bar shows remaining + buffer
-- [ ] Text-only (no icons/emoji)
-- [ ] Tooltip shows top 3 urgent
-- [ ] Opt-in via configuration
-- [ ] Event-driven updates (no polling)
-- [ ] Tests pass (3 scenarios)
+- [x] Status bar shows remaining + buffer
+- [x] Text-only (no icons/emoji)
+- [x] Tooltip shows top 3 urgent
+- [x] Opt-in via configuration
+- [x] Event-driven updates (no polling)
+- [x] Tests pass (6 scenarios)
 
-**Estimated Effort**: 2-3 hours
+**Status**: ✅ COMPLETE (v3.4.0)
+
+### Implementation Summary (v3.4.0)
+
+**Core Features Delivered**:
+- Workload calculator with remaining/buffer calculation
+- Status bar item showing "25h left, +8h buffer"
+- Rich tooltip with top 3 urgent issues
+- Opt-in via `redmine.statusBar.showWorkload` setting
+- Event-driven updates on tree refresh and config change
+
+**Testing**:
+- 6 workload calculator tests
+- Total: 138 tests passing
+- CI green ✓
 
 ---
 

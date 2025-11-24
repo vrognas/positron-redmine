@@ -2,7 +2,7 @@
   "name": "positron-redmine",
   "displayName": "Redmine for Positron",
   "description": "Redmine project management integration for Positron IDE and VS Code",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "publisher": "vrognas",
   "license": "MIT",
   "icon": "logo.png",
@@ -351,6 +351,12 @@
           "additionalProperties": false,
           "scope": "application",
           "markdownDescription": "**Weekly working hours schedule**\n\nSet working hours for each day of the week (0-24h). Use 0 for non-working days.\n\n**Example schedules:**\n- Standard 5-day week: Mon-Fri = 8h, Sat-Sun = 0h\n- 4-day week: Mon-Thu = 10h, Fri-Sun = 0h\n- Part-time Friday: Mon-Thu = 8h, Fri = 4h, Sat-Sun = 0h\n\nUsed to calculate utilization percentages in time entry view."
+        },
+        "redmine.statusBar.showWorkload": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "**Show workload overview in status bar**\n\nDisplays remaining work and capacity buffer.\n\n**Note:** Opt-in to reduce noise. Enable if you need capacity planning at a glance.\n\n**Format:** `25h left, +8h buffer`"
         }
       }
     }

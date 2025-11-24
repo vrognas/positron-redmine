@@ -4,6 +4,22 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ## [Unreleased]
 
+## [3.4.0] - 2025-11-24
+
+### Added
+
+- MVP-4: Workload Overview status bar item
+- Shows remaining work and capacity buffer at a glance
+- Rich tooltip with top 3 urgent issues
+- Opt-in via `redmine.statusBar.showWorkload` setting (default: false)
+- Event-driven updates on tree refresh and config change
+- MyIssuesTree.getIssues() method for workload calculation
+
+### Changed
+
+- Status bar format: "25h left, +8h buffer"
+- Click status bar to list open issues
+
 ## [3.3.0] - 2025-11-24
 
 ### Added
