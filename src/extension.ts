@@ -228,27 +228,39 @@ export function activate(context: vscode.ExtensionContext): void {
   // Initial check
   updateConfiguredContext();
 
+  // Debounce config changes to avoid rapid-fire updates
+  let configChangeTimeout: ReturnType<typeof setTimeout> | null = null;
+
   // Listen for configuration changes
   context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(async (event) => {
-      // Only update server context for server-related config changes
-      // Skip for UI-only configs (statusBar, workingHours)
-      if (
-        event.affectsConfiguration("redmine") &&
-        !event.affectsConfiguration("redmine.statusBar") &&
-        !event.affectsConfiguration("redmine.workingHours")
-      ) {
-        await updateConfiguredContext();
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!event.affectsConfiguration("redmine")) return;
+
+      // Clear pending timeout
+      if (configChangeTimeout) {
+        clearTimeout(configChangeTimeout);
       }
-      // Re-initialize status bar on config change
-      if (event.affectsConfiguration("redmine.statusBar")) {
-        initializeWorkloadStatusBar();
-        updateWorkloadStatusBar();
-      }
-      // Update status bar on schedule change
-      if (event.affectsConfiguration("redmine.workingHours")) {
-        updateWorkloadStatusBar();
-      }
+
+      // Debounce by 300ms
+      configChangeTimeout = setTimeout(async () => {
+        // Only update server context for server-related config changes
+        // Skip for UI-only configs (statusBar, workingHours)
+        if (
+          !event.affectsConfiguration("redmine.statusBar") &&
+          !event.affectsConfiguration("redmine.workingHours")
+        ) {
+          await updateConfiguredContext();
+        }
+        // Re-initialize status bar on config change
+        if (event.affectsConfiguration("redmine.statusBar")) {
+          initializeWorkloadStatusBar();
+          updateWorkloadStatusBar();
+        }
+        // Update status bar on schedule change
+        if (event.affectsConfiguration("redmine.workingHours")) {
+          updateWorkloadStatusBar();
+        }
+      }, 300);
     })
   );
 
@@ -709,11 +721,19 @@ export function activate(context: vscode.ExtensionContext): void {
     await vscode.env.clipboard.writeText(url);
     vscode.window.showInformationMessage(`Copied URL for issue #${issue.id}`);
   });
+  // Debounce refresh to prevent rapid-fire API calls
+  let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
+
   context.subscriptions.push(
     vscode.commands.registerCommand("redmine.refreshIssues", () => {
-      projectsTree.clearProjects();
-      projectsTree.onDidChangeTreeData$.fire();
-      myIssuesTree.onDidChangeTreeData$.fire();
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
+      refreshTimeout = setTimeout(() => {
+        projectsTree.clearProjects();
+        projectsTree.onDidChangeTreeData$.fire();
+        myIssuesTree.onDidChangeTreeData$.fire();
+      }, 300);
     }),
     vscode.commands.registerCommand("redmine.toggleTreeView", () => {
       vscode.commands.executeCommand(
