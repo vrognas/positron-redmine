@@ -231,7 +231,13 @@ export function activate(context: vscode.ExtensionContext): void {
   // Listen for configuration changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration("redmine")) {
+      // Only update server context for server-related config changes
+      // Skip for UI-only configs (statusBar, workingHours)
+      if (
+        event.affectsConfiguration("redmine") &&
+        !event.affectsConfiguration("redmine.statusBar") &&
+        !event.affectsConfiguration("redmine.workingHours")
+      ) {
         await updateConfiguredContext();
       }
       // Re-initialize status bar on config change
