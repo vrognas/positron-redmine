@@ -23,6 +23,17 @@ function formatDateWithWeekday(dateStr: string | null): string {
 }
 
 /**
+ * Format decimal hours as HH:MM (rounded up to nearest minute)
+ */
+function formatHoursAsTime(hours: number | null): string {
+  if (hours === null) return "—";
+  const totalMinutes = Math.ceil(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}:${m.toString().padStart(2, "0")}`;
+}
+
+/**
  * Gantt timeline webview panel
  * Shows issues as horizontal bars on a timeline
  */
@@ -163,15 +174,13 @@ export class GanttPanel {
             ? issue.subject.substring(0, 19) + "..."
             : issue.subject;
 
-        const estHours = issue.estimated_hours !== null ? `${issue.estimated_hours}h` : "—";
-        const spentHours = issue.spent_hours !== null ? `${issue.spent_hours}h` : "—";
         const tooltip = [
           `#${issue.id} ${issue.subject}`,
           `Project: ${issue.project}`,
           `Start: ${formatDateWithWeekday(issue.start_date)}`,
           `Due: ${formatDateWithWeekday(issue.due_date)}`,
-          `Estimated: ${estHours}`,
-          `Spent: ${spentHours}`,
+          `Estimated: ${formatHoursAsTime(issue.estimated_hours)}`,
+          `Spent: ${formatHoursAsTime(issue.spent_hours)}`,
         ].join("\n");
 
         return `
@@ -208,15 +217,13 @@ export class GanttPanel {
         const y = headerHeight + index * (barHeight + barGap);
         const color = this._getStatusColor(issue.status);
 
-        const estHours = issue.estimated_hours !== null ? `${issue.estimated_hours}h` : "—";
-        const spentHours = issue.spent_hours !== null ? `${issue.spent_hours}h` : "—";
         const tooltip = [
           `#${issue.id} ${issue.subject}`,
           `Project: ${issue.project}`,
           `Start: ${formatDateWithWeekday(issue.start_date)}`,
           `Due: ${formatDateWithWeekday(issue.due_date)}`,
-          `Estimated: ${estHours}`,
-          `Spent: ${spentHours}`,
+          `Estimated: ${formatHoursAsTime(issue.estimated_hours)}`,
+          `Spent: ${formatHoursAsTime(issue.spent_hours)}`,
         ].join("\n");
 
         return `
@@ -236,6 +243,14 @@ export class GanttPanel {
       timelineWidth,
       0
     );
+
+    // Calculate today's position for auto-scroll
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayX =
+      ((today.getTime() - minDate.getTime()) /
+        (maxDate.getTime() - minDate.getTime())) *
+      timelineWidth;
 
     const svgHeight = headerHeight + contentHeight;
 
@@ -310,6 +325,13 @@ export class GanttPanel {
         vscode.postMessage({ command: 'openIssue', issueId });
       });
     });
+    // Auto-scroll to today marker (centered)
+    const timeline = document.querySelector('.gantt-timeline');
+    const todayX = ${Math.round(todayX)};
+    if (timeline && todayX > 0) {
+      const containerWidth = timeline.clientWidth;
+      timeline.scrollLeft = Math.max(0, todayX - containerWidth / 2);
+    }
   </script>
 </body>
 </html>`;
