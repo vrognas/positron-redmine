@@ -16,6 +16,7 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 - Unsafe `reason as string` casts replaced with `errorToString()`
 - HTTP requests now timeout after 30s (prevents indefinite hangs)
 - HTTP error messages now user-friendly (5xx, 4xx, network errors)
+- **Subproject filter logic was inverted** - fixed in getOpenIssuesForProject
 
 ### Changed
 
@@ -27,6 +28,34 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 ### Removed
 
 - Legacy v1.x migration webview (no longer needed)
+
+## [3.7.0] - 2025-11-25
+
+### Added
+
+- **Gantt timeline webview** - SVG-based visual timeline (`Redmine: Show Timeline`)
+  - Bars colored by flexibility status (overbooked/at-risk/on-track/completed)
+  - Click bars to open issue actions
+  - Weekly date markers with today indicator
+- **Sub-issue hierarchy** - Collapsible parent/child tree view
+  - Parent containers for unassigned parents (aggregated hours)
+  - API fetches with `include=children,relations`
+- **Issue relations display** - Shows blocking dependencies
+  - 🚫 blocked indicator in tree description
+  - Relations grouped by type in tooltip
+  - Blocked issues sorted to bottom
+- **Billable visibility** - Tracker info in tooltips
+  - Non-billable issues (tracker !== "Task") dimmed
+  - Tracker name shown in tooltip
+- Unified time logging UX (IssueController matches QuickLogTime flow)
+  - Separate hours/comment inputs (not "hours|comment")
+  - Flexible time formats: 1.5, 1:30, 1h 30min
+  - Status bar confirmation
+
+### Changed
+
+- Issue model extended with parent/children/relations fields
+- Tree sorting considers blocked status
 
 ## [3.6.0] - 2025-11-25
 

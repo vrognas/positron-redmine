@@ -6,7 +6,7 @@ Positron-Redmine is a VS Code/Positron IDE extension that integrates Redmine pro
 
 **Core Pattern**: MVC-like with Tree Providers (View), Controllers (Business Logic), and RedmineServer (Model/API).
 
-**Version**: 3.6.0 | **Min VS Code**: 1.106.0 | **Node**: >=20.0.0
+**Version**: 3.7.0 | **Min VS Code**: 1.106.0 | **Node**: >=20.0.0
 
 ## Directory Structure
 
@@ -35,6 +35,8 @@ positron-redmine/
 │   │   ├── my-issues-tree.ts
 │   │   ├── my-time-entries-tree.ts
 │   │   └── projects-tree.ts
+│   ├── webviews/              # Webview panels
+│   │   └── gantt-panel.ts     # SVG timeline
 │   ├── definitions/           # Configuration schemas
 │   │   └── redmine-config.ts
 │   └── utilities/             # Helpers
@@ -43,6 +45,7 @@ positron-redmine/
 │       ├── flexibility-calculator.ts
 │       ├── redaction.ts
 │       ├── secret-manager.ts
+│       ├── time-input.ts      # Time parsing utilities
 │       ├── tree-item-factory.ts
 │       └── workload-calculator.ts
 ├── test/
