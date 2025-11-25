@@ -12,7 +12,6 @@ import newIssue from "./commands/new-issue";
 import { quickLogTime } from "./commands/quick-log-time";
 import { RedmineConfig } from "./definitions/redmine-config";
 import { ActionProperties } from "./commands/action-properties";
-import { MyIssuesTree } from "./trees/my-issues-tree";
 import { ProjectsTree, ProjectsViewStyle } from "./trees/projects-tree";
 import { MyTimeEntriesTreeDataProvider } from "./trees/my-time-entries-tree";
 import { RedmineSecretManager } from "./utilities/secret-manager";
@@ -27,10 +26,8 @@ const SERVER_CACHE_SIZE = 3;
 
 // Module-level cleanup resources
 let cleanupResources: {
-  myIssuesTree?: MyIssuesTree;
   projectsTree?: ProjectsTree;
   myTimeEntriesTree?: MyTimeEntriesTreeDataProvider;
-  myIssuesTreeView?: vscode.TreeView<unknown>;
   projectsTreeView?: vscode.TreeView<unknown>;
   myTimeEntriesTreeView?: vscode.TreeView<unknown>;
   workloadStatusBar?: vscode.StatusBarItem;
@@ -68,16 +65,11 @@ export function activate(context: vscode.ExtensionContext): void {
     return new RedmineServer(options);
   };
 
-  const myIssuesTree = new MyIssuesTree();
   const projectsTree = new ProjectsTree();
   const myTimeEntriesTree = new MyTimeEntriesTreeDataProvider();
-  cleanupResources.myIssuesTree = myIssuesTree;
   cleanupResources.projectsTree = projectsTree;
   cleanupResources.myTimeEntriesTree = myTimeEntriesTree;
 
-  cleanupResources.myIssuesTreeView = vscode.window.createTreeView("redmine-explorer-my-issues", {
-    treeDataProvider: myIssuesTree,
-  });
   cleanupResources.projectsTreeView = vscode.window.createTreeView("redmine-explorer-projects", {
     treeDataProvider: projectsTree,
   });
@@ -116,7 +108,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!statusBar) return;
 
     // Fetch issues if not cached (triggers initial load)
-    const issues = await myIssuesTree.fetchIssuesIfNeeded();
+    const issues = await projectsTree.fetchIssuesIfNeeded();
 
     // Re-check after await - status bar might have been disposed
     if (!cleanupResources.workloadStatusBar) return;
@@ -161,7 +153,7 @@ export function activate(context: vscode.ExtensionContext): void {
   updateWorkloadStatusBar();
 
   // Update on tree refresh
-  myIssuesTree.onDidChangeTreeData$.event(() => {
+  projectsTree.onDidChangeTreeData$.event(() => {
     if (cleanupResources.workloadStatusBar) {
       updateWorkloadStatusBar();
     }
@@ -208,13 +200,11 @@ export function activate(context: vscode.ExtensionContext): void {
           additionalHeaders: config.get("additionalHeaders"),
         });
 
-        myIssuesTree.setServer(server);
         projectsTree.setServer(server);
         myTimeEntriesTree.setServer(server);
         projectsTree.onDidChangeTreeData$.fire();
-        myIssuesTree.onDidChangeTreeData$.fire();
         myTimeEntriesTree.refresh();
-        // Status bar updates via myIssuesTree event listener
+        // Status bar updates via projectsTree event listener
       } catch (error) {
         vscode.window.showErrorMessage(
           `Failed to initialize Redmine server: ${error}`
@@ -222,7 +212,6 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     } else {
       // Clear servers when not configured (don't refresh - let welcome view show)
-      myIssuesTree.setServer(undefined);
       projectsTree.setServer(undefined);
       myTimeEntriesTree.setServer(undefined);
     }
@@ -621,12 +610,10 @@ export function activate(context: vscode.ExtensionContext): void {
   registerCommand("newIssue", newIssue);
   registerCommand("quickLogTime", (props) => quickLogTime(props, context));
   registerCommand("changeDefaultServer", (conf) => {
-    myIssuesTree.setServer(conf.server);
     projectsTree.setServer(conf.server);
     myTimeEntriesTree.setServer(conf.server);
 
     projectsTree.onDidChangeTreeData$.fire();
-    myIssuesTree.onDidChangeTreeData$.fire();
     myTimeEntriesTree.refresh();
   });
 
@@ -700,7 +687,6 @@ export function activate(context: vscode.ExtensionContext): void {
       refreshTimeout = setTimeout(() => {
         projectsTree.clearProjects();
         projectsTree.onDidChangeTreeData$.fire();
-        myIssuesTree.onDidChangeTreeData$.fire();
       }, CONFIG_DEBOUNCE_MS);
     }),
     vscode.commands.registerCommand("redmine.toggleTreeView", () => {
@@ -744,7 +730,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // Gantt timeline command
     vscode.commands.registerCommand("redmine.showGantt", async () => {
       // Ensure issues are fetched
-      const issues = await myIssuesTree.fetchIssuesIfNeeded();
+      const issues = await projectsTree.fetchIssuesIfNeeded();
 
       if (issues.length === 0) {
         vscode.window.showInformationMessage(
@@ -753,25 +739,19 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
 
-      const panel = GanttPanel.createOrShow(myIssuesTree.server);
-      panel.updateIssues(issues, myIssuesTree.getFlexibilityCache());
+      const panel = GanttPanel.createOrShow(projectsTree.server);
+      panel.updateIssues(issues, projectsTree.getFlexibilityCache());
     })
   );
 }
 
 export function deactivate(): void {
   // Dispose EventEmitters in tree providers
-  if (cleanupResources.myIssuesTree) {
-    cleanupResources.myIssuesTree.onDidChangeTreeData$.dispose();
-  }
   if (cleanupResources.projectsTree) {
     cleanupResources.projectsTree.onDidChangeTreeData$.dispose();
   }
 
   // Dispose tree view instances
-  if (cleanupResources.myIssuesTreeView) {
-    cleanupResources.myIssuesTreeView.dispose();
-  }
   if (cleanupResources.projectsTreeView) {
     cleanupResources.projectsTreeView.dispose();
   }

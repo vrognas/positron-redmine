@@ -32,6 +32,22 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 - Legacy v1.x migration webview (no longer needed)
 
+## [3.8.0] - 2025-11-25
+
+### Added
+
+- **Consolidated Projects view** - merged "Issues assigned to me" into Projects
+  - Issues assigned to you grouped under their projects
+  - Projects with assigned issues shown first (with count)
+  - Projects without assigned issues dimmed/deemphasized
+  - Enhanced tree items with flexibility scores under projects
+- **Timeline button in view title** - calendar icon for quick Gantt access
+
+### Changed
+
+- **Quick update now first in issue actions** - most common action at top
+- Removed separate "Issues assigned to me" view (consolidated into Projects)
+
 ## [3.7.0] - 2025-11-25
 
 ### Added

@@ -229,9 +229,10 @@ export class IssueController {
       const option = await vscode.window.showQuickPick(
         [
           {
-            action: "changeStatus",
-            label: "Change status",
-            description: "Changes issue status",
+            action: "quickUpdate",
+            label: "Quick update",
+            description:
+              "Change assignee, status and leave a message in one step",
             detail: issueDetails,
           },
           {
@@ -241,17 +242,16 @@ export class IssueController {
             detail: issueDetails,
           },
           {
+            action: "changeStatus",
+            label: "Change status",
+            description: "Changes issue status",
+            detail: issueDetails,
+          },
+          {
             action: "openInBrowser",
             label: "Open in browser",
             description:
               "Opens an issue in a browser (might need additional login)",
-            detail: issueDetails,
-          },
-          {
-            action: "quickUpdate",
-            label: "Quick update",
-            description:
-              "Change assignee, status and leave a message in one step",
             detail: issueDetails,
           },
         ],
