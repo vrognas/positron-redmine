@@ -32,14 +32,11 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ### Added
 
-- Claude Code hooks for enhanced AI-assisted development
-  - PostToolUse: Auto-format files with Prettier after Edit/Write
-  - PreToolUse: Typecheck before git commits (blocks on failure)
+- Claude Code hooks for AI-assisted development
   - UserPromptSubmit: Inject git branch/status context
-  - Stop: Remind about running tests after code changes
   - PreCompact: Log context compaction events for debugging
 - SessionStart extended: Node version validation, auto npm install
-- Claude hooks test suite (9 tests)
+- Claude hooks test suite (5 tests)
 
 ### Changed
 
