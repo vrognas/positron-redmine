@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { Issue } from "../redmine/models/issue";
+import { RedmineServer } from "../redmine/redmine-server";
 import { FlexibilityScore } from "../utilities/flexibility-calculator";
 
 interface GanttIssue {
@@ -20,9 +21,11 @@ export class GanttPanel {
   private readonly _panel: vscode.WebviewPanel;
   private _disposables: vscode.Disposable[] = [];
   private _issues: GanttIssue[] = [];
+  private _server: RedmineServer | undefined;
 
-  private constructor(panel: vscode.WebviewPanel) {
+  private constructor(panel: vscode.WebviewPanel, server?: RedmineServer) {
     this._panel = panel;
+    this._server = server;
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this._panel.webview.onDidReceiveMessage(
       (message) => this._handleMessage(message),
@@ -31,11 +34,15 @@ export class GanttPanel {
     );
   }
 
-  public static createOrShow(): GanttPanel {
+  public static createOrShow(server?: RedmineServer): GanttPanel {
     const column = vscode.ViewColumn.Beside;
 
     if (GanttPanel.currentPanel) {
       GanttPanel.currentPanel._panel.reveal(column);
+      // Update server reference
+      if (server) {
+        GanttPanel.currentPanel._server = server;
+      }
       return GanttPanel.currentPanel;
     }
 
@@ -49,7 +56,7 @@ export class GanttPanel {
       }
     );
 
-    GanttPanel.currentPanel = new GanttPanel(panel);
+    GanttPanel.currentPanel = new GanttPanel(panel, server);
     return GanttPanel.currentPanel;
   }
 
@@ -78,11 +85,11 @@ export class GanttPanel {
   private _handleMessage(message: { command: string; issueId?: number }): void {
     switch (message.command) {
       case "openIssue":
-        if (message.issueId) {
+        if (message.issueId && this._server) {
           vscode.commands.executeCommand(
             "redmine.openActionsForIssue",
             false,
-            undefined,
+            { server: this._server },
             String(message.issueId)
           );
         }

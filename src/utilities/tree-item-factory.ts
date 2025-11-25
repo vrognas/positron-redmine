@@ -74,15 +74,14 @@ export function createEnhancedIssueTreeItem(
     const estHours = issue.estimated_hours ?? 0;
     const blocked = isBlocked(issue);
 
-    // Format: "🚫 #123 10/40h 5d On Track" (with blocked indicator if applicable)
+    // Format: "🚫 #123 10/40h 5d On Track" or "○ #123..." for non-billable
     const blockedPrefix = blocked ? "🚫 " : "";
+    const billablePrefix = isBillable(issue) ? "" : "○ ";
     treeItem.description =
-      `${blockedPrefix}#${issue.id} ${spentHours}/${estHours}h ${flexibility.daysRemaining}d ${config.text}`;
+      `${blockedPrefix}${billablePrefix}#${issue.id} ${spentHours}/${estHours}h ${flexibility.daysRemaining}d ${config.text}`;
 
-    // Determine icon color: dim non-billable issues
-    const iconColor = isBillable(issue)
-      ? new vscode.ThemeColor(config.color)
-      : new vscode.ThemeColor("list.deemphasizedForeground");
+    // Always use status color - billability shown via prefix
+    const iconColor = new vscode.ThemeColor(config.color);
 
     // ThemeIcon for accessibility
     treeItem.iconPath = new vscode.ThemeIcon(config.icon, iconColor);

@@ -17,6 +17,9 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 - HTTP requests now timeout after 30s (prevents indefinite hangs)
 - HTTP error messages now user-friendly (5xx, 4xx, network errors)
 - **Subproject filter logic was inverted** - fixed in getOpenIssuesForProject
+- **Gantt timeline clicks now work** - was passing wrong args to command
+- **422 errors now show Redmine's actual error message** - not generic "Validation failed"
+- **Icon colors restored** - non-billable issues show ○ prefix instead of removing status color
 
 ### Changed
 

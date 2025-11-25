@@ -195,7 +195,17 @@ export class RedmineServer {
           if (statusCode === 400) {
             message = "Bad request (400)";
           } else if (statusCode === 422) {
-            message = "Validation failed (422)";
+            // Try to extract Redmine's error details from response body
+            try {
+              const body = JSON.parse(incomingBuffer.toString("utf8"));
+              if (body.errors && Array.isArray(body.errors) && body.errors.length > 0) {
+                message = `Validation failed: ${body.errors.join(", ")}`;
+              } else {
+                message = "Validation failed (422)";
+              }
+            } catch {
+              message = "Validation failed (422)";
+            }
           } else {
             message = `Client error (${statusCode} ${statusMessage})`;
           }

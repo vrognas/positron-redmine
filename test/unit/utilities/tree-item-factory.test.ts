@@ -152,7 +152,7 @@ describe("createEnhancedIssueTreeItem", () => {
     expect(tooltipValue).toContain("Tasks"); // tracker.name from mockIssue
   });
 
-  it("dims non-billable issues (tracker !== Task)", () => {
+  it("shows prefix for non-billable issues (tracker !== Task)", () => {
     const nonBillableIssue: Issue = {
       ...mockIssue,
       tracker: { id: 2, name: "Non-billable" },
@@ -165,9 +165,11 @@ describe("createEnhancedIssueTreeItem", () => {
       "test.command"
     );
 
-    // iconPath should use deemphasizedForeground color
+    // Non-billable issues get "○ " prefix in description
+    expect(treeItem.description).toContain("○ ");
+    // Status color is still used (not dimmed)
     const iconPath = treeItem.iconPath as { color?: { id: string } };
-    expect(iconPath?.color?.id).toBe("list.deemphasizedForeground");
+    expect(iconPath?.color?.id).toBe("testing.iconPassed");
   });
 
   it("does NOT dim billable issues (tracker === Task)", () => {

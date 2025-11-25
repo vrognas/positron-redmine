@@ -753,7 +753,7 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
 
-      const panel = GanttPanel.createOrShow();
+      const panel = GanttPanel.createOrShow(myIssuesTree.server);
       panel.updateIssues(issues, myIssuesTree.getFlexibilityCache());
     })
   );
