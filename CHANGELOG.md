@@ -28,6 +28,21 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 - Legacy v1.x migration webview (no longer needed)
 
+## [3.6.0] - 2025-11-25
+
+### Added
+
+- Claude Code hooks for AI-assisted development
+  - UserPromptSubmit: Inject git branch/status context
+  - PreCompact: Log context compaction events for debugging
+- SessionStart extended: Node version validation, auto npm install
+- Claude hooks test suite (5 tests)
+
+### Changed
+
+- Hooks organized in scripts/hooks/ directory
+- SessionStart now validates Node >=20 and auto-installs npm deps
+
 ## [3.4.0] - 2025-11-24
 
 ### Added
