@@ -316,12 +316,6 @@ export class GanttPanel {
 
         // Issue row
         const issue = row.issue!;
-        const maxLen = Math.max(5, 28 - row.depth * 2);
-        const truncatedSubject =
-          issue.subject.length > maxLen
-            ? issue.subject.substring(0, maxLen - 3) + "..."
-            : issue.subject;
-
         const tooltip = [
           `#${issue.id} ${issue.subject}`,
           `Project: ${issue.project}`,
@@ -334,7 +328,7 @@ export class GanttPanel {
         return `
           <g class="issue-label" data-issue-id="${issue.id}" style="cursor: pointer;">
             <text x="${5 + indent}" y="${y + barHeight / 2 + 5}" fill="var(--vscode-foreground)" font-size="12">
-              #${issue.id} ${truncatedSubject}
+              #${issue.id} ${issue.subject}
             </text>
             <title>${tooltip}</title>
           </g>
@@ -468,9 +462,24 @@ export class GanttPanel {
     .gantt-labels {
       flex-shrink: 0;
       width: ${labelWidth}px;
+      min-width: 150px;
+      max-width: 500px;
       background: var(--vscode-editor-background);
-      border-right: 1px solid var(--vscode-panel-border);
       z-index: 1;
+      overflow: hidden;
+    }
+    .gantt-labels svg {
+      width: 100%;
+    }
+    .gantt-resize-handle {
+      width: 6px;
+      background: var(--vscode-panel-border);
+      cursor: col-resize;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .gantt-resize-handle:hover, .gantt-resize-handle.dragging {
+      background: var(--vscode-focusBorder);
     }
     .gantt-timeline {
       flex-grow: 1;
@@ -503,11 +512,12 @@ export class GanttPanel {
     </div>
   </div>
   <div class="gantt-container">
-    <div class="gantt-labels">
+    <div class="gantt-labels" id="ganttLabels">
       <svg width="${labelWidth}" height="${svgHeight}">
         ${labels}
       </svg>
     </div>
+    <div class="gantt-resize-handle" id="resizeHandle"></div>
     <div class="gantt-timeline">
       <svg width="${timelineWidth}" height="${svgHeight}">
         ${dateMarkers}
@@ -521,16 +531,31 @@ export class GanttPanel {
     const minDateMs = ${minDate.getTime()};
     const maxDateMs = ${maxDate.getTime()};
 
-    // Undo/Redo stacks
-    const undoStack = [];
-    const redoStack = [];
+    // Restore state from previous session
+    const previousState = vscode.getState() || { undoStack: [], redoStack: [], labelWidth: ${labelWidth} };
+    const undoStack = previousState.undoStack || [];
+    const redoStack = previousState.redoStack || [];
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
+
+    function saveState() {
+      vscode.setState({ undoStack, redoStack, labelWidth: labelsColumn?.offsetWidth || ${labelWidth} });
+    }
 
     function updateUndoRedoButtons() {
       undoBtn.disabled = undoStack.length === 0;
       redoBtn.disabled = redoStack.length === 0;
+      saveState();
     }
+
+    // Apply saved label width
+    const labelsColumn = document.getElementById('ganttLabels');
+    if (previousState.labelWidth && labelsColumn) {
+      labelsColumn.style.width = previousState.labelWidth + 'px';
+    }
+
+    // Initial button state
+    updateUndoRedoButtons();
 
     // Convert x position to date string (YYYY-MM-DD)
     function xToDate(x) {
@@ -694,6 +719,39 @@ export class GanttPanel {
       const containerWidth = timeline.clientWidth;
       timeline.scrollLeft = Math.max(0, todayX - containerWidth / 2);
     }
+
+    // Column resize handling
+    const resizeHandle = document.getElementById('resizeHandle');
+    let isResizing = false;
+    let resizeStartX = 0;
+    let resizeStartWidth = 0;
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      resizeStartX = e.clientX;
+      resizeStartWidth = labelsColumn.offsetWidth;
+      resizeHandle.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      const delta = e.clientX - resizeStartX;
+      const newWidth = Math.min(500, Math.max(150, resizeStartWidth + delta));
+      labelsColumn.style.width = newWidth + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        resizeHandle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        saveState(); // Persist new column width
+      }
+    });
   </script>
 </body>
 </html>`;
