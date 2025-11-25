@@ -15,11 +15,23 @@ interface GanttIssue {
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAYS_SHORT = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 function formatDateWithWeekday(dateStr: string | null): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
   return `${dateStr} (${WEEKDAYS[d.getDay()]})`;
+}
+
+/**
+ * Get ISO week number for a date
+ */
+function getWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
 /**
@@ -384,6 +396,8 @@ export class GanttPanel {
     leftMargin: number
   ): string {
     const backgrounds: string[] = [];
+    const weekHeaders: string[] = [];
+    const dayHeaders: string[] = [];
     const markers: string[] = [];
     const current = new Date(minDate);
     const today = new Date();
@@ -408,14 +422,21 @@ export class GanttPanel {
         `);
       }
 
-      // Weekly markers
+      // Week header (top row) - show at start of each week (Monday)
       if (dayOfWeek === 1) {
-        const label = `${current.getMonth() + 1}/${current.getDate()}`;
-        markers.push(`
+        const weekNum = getWeekNumber(current);
+        const year = current.getFullYear();
+        weekHeaders.push(`
           <line x1="${x}" y1="0" x2="${x}" y2="100%" class="date-marker"/>
-          <text x="${x + 2}" y="12" fill="var(--vscode-descriptionForeground)" font-size="10">${label}</text>
+          <text x="${x + 4}" y="14" fill="var(--vscode-foreground)" font-size="11" font-weight="bold">W${weekNum}, ${year}</text>
         `);
       }
+
+      // Day header (bottom row) - show day number and weekday
+      const dayLabel = `${current.getDate()} ${WEEKDAYS_SHORT[dayOfWeek]}`;
+      dayHeaders.push(`
+        <text x="${x + dayWidth / 2}" y="30" fill="var(--vscode-descriptionForeground)" font-size="9" text-anchor="middle">${dayLabel}</text>
+      `);
 
       // Today marker
       if (current.toDateString() === today.toDateString()) {
@@ -427,8 +448,8 @@ export class GanttPanel {
       current.setDate(current.getDate() + 1);
     }
 
-    // Backgrounds first (behind bars), then markers
-    return backgrounds.join("") + markers.join("");
+    // Backgrounds first, then headers, then today marker
+    return backgrounds.join("") + weekHeaders.join("") + dayHeaders.join("") + markers.join("");
   }
 }
 
