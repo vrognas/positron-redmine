@@ -209,6 +209,222 @@ Fetch parent details to show as container in tree.
 
 ---
 
+## Implementation Details
+
+### Pre-Implementation Validation
+
+**Required before Phase 2.2:**
+```bash
+# Test actual Redmine API response structure for parent field
+curl -H "X-Redmine-API-Key: $KEY" \
+  "$REDMINE_URL/issues.json?assigned_to_id=me&include=children,relations" | jq '.issues[0]'
+```
+
+Confirm `parent` field structure: `{ "id": number, "name"?: string }` or just `{ "id": number }`
+
+---
+
+### Type Design (Phase 2.2)
+
+**Issue model additions:**
+```typescript
+// issue.ts
+export interface Issue {
+  // ... existing fields
+  parent?: { id: number };           // From API - may not include name
+  children?: Issue[];                // From include=children
+  relations?: IssueRelation[];       // From include=relations
+}
+
+// New interface for parent containers (unassigned parents)
+export interface ParentContainer {
+  id: number;
+  subject: string;
+  isContainer: true;                 // Discriminator
+  childCount: number;
+  aggregatedHours: { spent: number; estimated: number };
+}
+
+// Tree item union type
+export type IssueTreeItem = Issue | ParentContainer | LoadingPlaceholder;
+```
+
+**Type guard:**
+```typescript
+function isParentContainer(item: IssueTreeItem): item is ParentContainer {
+  return 'isContainer' in item && item.isContainer === true;
+}
+```
+
+---
+
+### Parent Fetching Strategy (Phase 2.2)
+
+**When:** During initial `getChildren()` call (blocking, not lazy)
+
+**Algorithm:**
+1. Fetch assigned issues with `include=children,relations`
+2. Extract unique `parent.id` values from issues with parents
+3. Filter out parents already in assigned list
+4. Batch fetch missing parents: `GET /issues.json?issue_id=1,2,3`
+5. Create `ParentContainer` objects for each
+6. Cache containers for session
+
+**Error handling:**
+- Parent fetch fails → show child without container, log warning
+- Parent deleted → skip container, show orphaned children at root
+
+---
+
+### Sorting Algorithm (Phase 2.3)
+
+**Sort key for blocked issues:**
+```typescript
+function getIssueSortKey(issue: Issue): number {
+  const hasBlocker = issue.relations?.some(r => r.relation_type === 'blocked');
+  const flexibility = calculateFlexibility(issue);
+
+  // Primary: blocked issues sink to bottom
+  // Secondary: by flexibility status (overbooked > at-risk > on-track)
+  // Tertiary: by days remaining
+  if (hasBlocker) return 1000 + flexibility.daysRemaining;
+  if (flexibility.status === 'overbooked') return 100 + flexibility.daysRemaining;
+  if (flexibility.status === 'at-risk') return 200 + flexibility.daysRemaining;
+  return 300 + flexibility.daysRemaining;
+}
+```
+
+---
+
+### Aggregated Hours (Phase 2.2)
+
+**Calculation:** Pre-computed during parent container creation
+
+```typescript
+function createParentContainer(parentIssue: Issue, children: Issue[]): ParentContainer {
+  return {
+    id: parentIssue.id,
+    subject: parentIssue.subject,
+    isContainer: true,
+    childCount: children.length,
+    aggregatedHours: {
+      spent: children.reduce((sum, c) => sum + (c.spent_hours ?? 0), 0),
+      estimated: children.reduce((sum, c) => sum + (c.estimated_hours ?? 0), 0),
+    },
+  };
+}
+```
+
+**Refresh:** Recalculated on tree refresh (not live)
+
+---
+
+### Settings Usage (Phase 2.1-2.5)
+
+| Setting | Check Location | Effect |
+|---------|----------------|--------|
+| `redmine.ui.dimNonBillable` | `tree-item-factory.ts` | Skip ThemeColor if false |
+| `redmine.ui.showRelations` | `my-issues-tree.ts` | Skip `include=relations` if false |
+| `redmine.gantt.enabled` | `extension.ts` | Hide Gantt command if false |
+
+**Implementation:**
+```typescript
+// tree-item-factory.ts
+const config = vscode.workspace.getConfiguration('redmine.ui');
+if (config.get('dimNonBillable') && issue.tracker.name !== 'Task') {
+  treeItem.iconPath = new ThemeIcon('circle-outline',
+    new ThemeColor('list.deemphasizedForeground'));
+}
+```
+
+---
+
+### Billable Determination (Phase 2.1)
+
+**Assumption:** Tracker name `"Task"` = billable, anything else = non-billable
+
+**Validation:** User's Redmine has trackers "Task" and "Non-billable"
+
+**Configurable fallback (future):** If other users need different logic:
+```typescript
+// Could add setting: redmine.ui.billableTrackers: ["Task", "Feature"]
+const billableTrackers = config.get<string[]>('billableTrackers') ?? ['Task'];
+const isBillable = billableTrackers.includes(issue.tracker.name);
+```
+
+**For now:** Hardcode "Task" check, document assumption
+
+---
+
+### Gantt Library Decision (Phase 2.5)
+
+**Selected:** Custom SVG (simplest)
+
+**Rationale:**
+- vis-timeline: Overkill for read-only view, adds 200KB+ dependency
+- D3.js: High learning curve, overkill for basic bars + arrows
+- Custom SVG: ~200 lines, full control, no dependencies
+
+**Implementation approach:**
+```typescript
+// Simple SVG generation
+function renderGanttSVG(issues: Issue[]): string {
+  const rowHeight = 30;
+  const dayWidth = 20;
+  // ... calculate positions, return SVG string
+}
+```
+
+**Dependency arrows:** SVG `<path>` with bezier curves
+
+---
+
+### Webview Implementation (Phase 2.5)
+
+**CSP meta tag (required):**
+```html
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none';
+           style-src ${webview.cspSource} 'unsafe-inline';
+           script-src ${webview.cspSource};
+           img-src ${webview.cspSource} data:;" />
+```
+
+**State persistence:**
+```typescript
+// Save: scroll position, expanded rows
+panel.webview.postMessage({ command: 'getState' });
+panel.webview.onDidReceiveMessage(msg => {
+  if (msg.command === 'state') {
+    context.workspaceState.update('ganttState', msg.data);
+  }
+});
+```
+
+**Click interaction:**
+```typescript
+// Webview sends: { command: 'issueClick', issueId: 123 }
+// Extension handles:
+panel.webview.onDidReceiveMessage(async msg => {
+  if (msg.command === 'issueClick') {
+    const issue = await server.getIssueById(msg.issueId);
+    new IssueController(issue, server).listActions();
+  }
+});
+```
+
+**acquireVsCodeApi() pattern:**
+```javascript
+// In webview HTML - call ONCE, store reference
+const vscode = acquireVsCodeApi();
+
+function handleIssueClick(issueId) {
+  vscode.postMessage({ command: 'issueClick', issueId });
+}
+```
+
+---
+
 ## Phased Implementation
 
 ### Phase 2.0: Bug Fixes (P0)
@@ -298,7 +514,7 @@ Issue response includes: parent: { id, name }
 - Child assigned but parent not → fetch parent, show as container
 - Deeply nested (grandchildren) → flatten to 2 levels max
 
-**Effort**: 3-4h
+**Effort**: 4-5h (includes type design, parent fetching, aggregation)
 
 ---
 
@@ -405,18 +621,17 @@ Tooltip:
 **Technical approach**:
 - VS Code Webview panel
 - Read-only (no drag-to-edit) - keeps complexity low
-- Library options:
-  - **vis-timeline** - pre-built Gantt, good for MVP
-  - **D3.js** - more control, higher effort
-  - **Custom SVG** - simplest, limited interactivity
+- **Library decision: Custom SVG** (no external dependencies, ~200 lines)
 
 **Implementation sequence**:
-1. Basic timeline with issue bars
-2. Add dependency arrows
-3. Add parent/child grouping
-4. Add click interactions
+1. Basic webview with CSP + theming
+2. SVG timeline with issue bars
+3. Add dependency arrows (bezier curves)
+4. Add parent/child grouping (indentation)
+5. Add click interactions (postMessage)
+6. State persistence (scroll, expanded)
 
-**Effort**: 8-12h
+**Effort**: 6-8h (custom SVG simpler than library integration)
 
 ---
 
@@ -427,17 +642,17 @@ Tooltip:
     ↓
 2.1 Billable      [30 min]  ← Quick win, high value for invoicing
     ↓
-2.2 Sub-issues    [3-4h]    ← Core feature for task breakdown
+2.2 Sub-issues    [4-5h]    ← Core feature for task breakdown
     ↓
 2.3 Relations     [2-3h]    ← Dependencies, builds on 2.2
     ↓
 2.4 Time UX       [1-2h]    ← Polish, can parallelize
     ↓
-2.5 Gantt         [8-12h]   ← Evaluate need after above
+2.5 Gantt         [6-8h]    ← Custom SVG, no dependencies
 ```
 
-**Total P0-P1**: ~8-10h
-**With P2 (Gantt)**: ~18-22h
+**Total P0-P1**: ~9-11h
+**With P2 (Gantt)**: ~15-19h
 
 ---
 
@@ -458,15 +673,29 @@ Tooltip:
 | Question | Decision |
 |----------|----------|
 | Billable display | Tooltip-only + dim non-billable issues |
+| Billable tracker | Hardcode "Task" = billable (user's setup) |
 | Sub-issue tree style | Collapsible parent nodes (like projects tree) |
 | Unassigned parents | Show as container even if not assigned |
+| Parent fetch timing | Blocking during initial load, cached |
 | Relations fetch | Eager (always visible) |
+| Blocked issue sorting | Sink to bottom, then by flexibility |
 | Gantt necessity | Keep - users value visual timeline |
+| Gantt library | Custom SVG (no dependencies, ~200 lines) |
 
 ---
 
 ## Changelog
 
+- 2025-11-25: Comprehensive validation pass - added Implementation Details section
+  - Type design for ParentContainer
+  - Parent fetching strategy and error handling
+  - Sorting algorithm for blocked issues
+  - Aggregated hours calculation
+  - Settings usage locations
+  - Billable determination logic
+  - Gantt library decision (custom SVG)
+  - Webview CSP, state, click handling
+  - Updated effort estimates
 - 2025-11-25: Added Redmine API patterns section
 - 2025-11-25: Added UX guidelines compliance section
 - 2025-11-25: Added VS Code API leverage section from docs research
