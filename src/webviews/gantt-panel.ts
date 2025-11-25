@@ -147,40 +147,20 @@ export class GanttPanel {
       (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    const svgWidth = Math.max(800, totalDays * 20);
+    const timelineWidth = Math.max(600, totalDays * 20);
+    const labelWidth = 200;
     const barHeight = 30;
     const barGap = 10;
     const headerHeight = 40;
-    const leftMargin = 200;
-    const svgHeight = headerHeight + this._issues.length * (barHeight + barGap);
+    const contentHeight = this._issues.length * (barHeight + barGap);
 
-    const bars = this._issues
+    // Left labels (fixed column)
+    const labels = this._issues
       .map((issue, index) => {
-        const start = issue.start_date
-          ? new Date(issue.start_date)
-          : new Date(issue.due_date!);
-        const end = issue.due_date
-          ? new Date(issue.due_date)
-          : new Date(issue.start_date!);
-
-        const startX =
-          leftMargin +
-          ((start.getTime() - minDate.getTime()) /
-            (maxDate.getTime() - minDate.getTime())) *
-            (svgWidth - leftMargin);
-        const endX =
-          leftMargin +
-          ((end.getTime() - minDate.getTime()) /
-            (maxDate.getTime() - minDate.getTime())) *
-            (svgWidth - leftMargin);
-
-        const width = Math.max(10, endX - startX);
         const y = headerHeight + index * (barHeight + barGap);
-        const color = this._getStatusColor(issue.status);
-
         const truncatedSubject =
-          issue.subject.length > 25
-            ? issue.subject.substring(0, 22) + "..."
+          issue.subject.length > 22
+            ? issue.subject.substring(0, 19) + "..."
             : issue.subject;
 
         const estHours = issue.estimated_hours !== null ? `${issue.estimated_hours}h` : "—";
@@ -195,10 +175,52 @@ export class GanttPanel {
         ].join("\n");
 
         return `
-          <g class="issue-bar" data-issue-id="${issue.id}" style="cursor: pointer;">
+          <g class="issue-label" data-issue-id="${issue.id}" style="cursor: pointer;">
             <text x="5" y="${y + barHeight / 2 + 5}" fill="var(--vscode-foreground)" font-size="12">
               #${issue.id} ${truncatedSubject}
             </text>
+            <title>${tooltip}</title>
+          </g>
+        `;
+      })
+      .join("");
+
+    // Right bars (scrollable timeline)
+    const bars = this._issues
+      .map((issue, index) => {
+        const start = issue.start_date
+          ? new Date(issue.start_date)
+          : new Date(issue.due_date!);
+        const end = issue.due_date
+          ? new Date(issue.due_date)
+          : new Date(issue.start_date!);
+
+        const startX =
+          ((start.getTime() - minDate.getTime()) /
+            (maxDate.getTime() - minDate.getTime())) *
+          timelineWidth;
+        const endX =
+          ((end.getTime() - minDate.getTime()) /
+            (maxDate.getTime() - minDate.getTime())) *
+          timelineWidth;
+
+        const width = Math.max(10, endX - startX);
+        const y = headerHeight + index * (barHeight + barGap);
+        const color = this._getStatusColor(issue.status);
+
+        const estHours = issue.estimated_hours !== null ? `${issue.estimated_hours}h` : "—";
+        const spentHours = issue.spent_hours !== null ? `${issue.spent_hours}h` : "—";
+        const tooltip = [
+          `#${issue.id} ${issue.subject}`,
+          `Project: ${issue.project}`,
+          `Start: ${formatDateWithWeekday(issue.start_date)}`,
+          `Due: ${formatDateWithWeekday(issue.due_date)}`,
+          `Estimated: ${estHours}`,
+          `Spent: ${spentHours}`,
+        ].join("\n");
+
+        return `
+          <g class="issue-bar" data-issue-id="${issue.id}" style="cursor: pointer;">
             <rect x="${startX}" y="${y}" width="${width}" height="${barHeight}"
                   fill="${color}" rx="4" ry="4" opacity="0.8"/>
             <title>${tooltip}</title>
@@ -207,13 +229,15 @@ export class GanttPanel {
       })
       .join("");
 
-    // Date markers
+    // Date markers (for timeline SVG, no leftMargin needed)
     const dateMarkers = this._generateDateMarkers(
       minDate,
       maxDate,
-      svgWidth,
-      leftMargin
+      timelineWidth,
+      0
     );
+
+    const svgHeight = headerHeight + contentHeight;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -229,26 +253,60 @@ export class GanttPanel {
       background: var(--vscode-editor-background);
       color: var(--vscode-foreground);
       font-family: var(--vscode-font-family);
-      overflow: auto;
+      overflow: hidden;
     }
     h2 { margin-bottom: 16px; }
+    .gantt-container {
+      display: flex;
+      overflow: hidden;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+    }
+    .gantt-labels {
+      flex-shrink: 0;
+      width: ${labelWidth}px;
+      background: var(--vscode-editor-background);
+      border-right: 1px solid var(--vscode-panel-border);
+      z-index: 1;
+    }
+    .gantt-timeline {
+      flex-grow: 1;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    .gantt-timeline::-webkit-scrollbar {
+      height: 8px;
+    }
+    .gantt-timeline::-webkit-scrollbar-thumb {
+      background: var(--vscode-scrollbarSlider-background);
+      border-radius: 4px;
+    }
     svg { display: block; }
-    .issue-bar:hover rect { opacity: 1; }
+    .issue-bar:hover rect, .issue-label:hover { opacity: 0.8; }
     .date-marker { stroke: var(--vscode-editorRuler-foreground); stroke-dasharray: 2,2; }
     .today-marker { stroke: var(--vscode-charts-red); stroke-width: 2; }
   </style>
 </head>
 <body>
   <h2>Timeline</h2>
-  <svg width="${svgWidth}" height="${svgHeight}">
-    ${dateMarkers}
-    ${bars}
-  </svg>
+  <div class="gantt-container">
+    <div class="gantt-labels">
+      <svg width="${labelWidth}" height="${svgHeight}">
+        ${labels}
+      </svg>
+    </div>
+    <div class="gantt-timeline">
+      <svg width="${timelineWidth}" height="${svgHeight}">
+        ${dateMarkers}
+        ${bars}
+      </svg>
+    </div>
+  </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    document.querySelectorAll('.issue-bar').forEach(bar => {
-      bar.addEventListener('click', () => {
-        const issueId = parseInt(bar.dataset.issueId);
+    document.querySelectorAll('.issue-bar, .issue-label').forEach(el => {
+      el.addEventListener('click', () => {
+        const issueId = parseInt(el.dataset.issueId);
         vscode.postMessage({ command: 'openIssue', issueId });
       });
     });
