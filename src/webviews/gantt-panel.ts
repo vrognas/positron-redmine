@@ -298,6 +298,7 @@ export class GanttPanel {
     }
     svg { display: block; }
     .issue-bar:hover rect, .issue-label:hover { opacity: 0.8; }
+    .weekend-bg { fill: var(--vscode-editor-inactiveSelectionBackground); opacity: 0.3; }
     .date-marker { stroke: var(--vscode-editorRuler-foreground); stroke-dasharray: 2,2; }
     .today-marker { stroke: var(--vscode-charts-red); stroke-width: 2; }
   </style>
@@ -382,10 +383,15 @@ export class GanttPanel {
     svgWidth: number,
     leftMargin: number
   ): string {
+    const backgrounds: string[] = [];
     const markers: string[] = [];
     const current = new Date(minDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    const dayWidth =
+      (svgWidth - leftMargin) /
+      ((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
 
     while (current <= maxDate) {
       const x =
@@ -394,8 +400,16 @@ export class GanttPanel {
           (maxDate.getTime() - minDate.getTime())) *
           (svgWidth - leftMargin);
 
+      // Weekend backgrounds (Saturday=6, Sunday=0)
+      const dayOfWeek = current.getDay();
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        backgrounds.push(`
+          <rect x="${x}" y="0" width="${dayWidth}" height="100%" class="weekend-bg"/>
+        `);
+      }
+
       // Weekly markers
-      if (current.getDay() === 1) {
+      if (dayOfWeek === 1) {
         const label = `${current.getMonth() + 1}/${current.getDate()}`;
         markers.push(`
           <line x1="${x}" y1="0" x2="${x}" y2="100%" class="date-marker"/>
@@ -413,7 +427,8 @@ export class GanttPanel {
       current.setDate(current.getDate() + 1);
     }
 
-    return markers.join("");
+    // Backgrounds first (behind bars), then markers
+    return backgrounds.join("") + markers.join("");
   }
 }
 
