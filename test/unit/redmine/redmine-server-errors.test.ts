@@ -42,7 +42,7 @@ describe("RedmineServer Error Handling", () => {
   describe("5xx Server Errors", () => {
     it("should handle 500 Internal Server Error", async () => {
       const server = new RedmineServer({
-        address: "http://localhost:3000",
+        address: "https://localhost:3000",
         key: "test-key",
         requestFn: createErrorMockRequest(500, "Internal Server Error"),
       });
@@ -54,7 +54,7 @@ describe("RedmineServer Error Handling", () => {
 
     it("should handle 502 Bad Gateway", async () => {
       const server = new RedmineServer({
-        address: "http://localhost:3000",
+        address: "https://localhost:3000",
         key: "test-key",
         requestFn: createErrorMockRequest(502, "Bad Gateway"),
       });
@@ -66,7 +66,7 @@ describe("RedmineServer Error Handling", () => {
 
     it("should handle 503 Service Unavailable", async () => {
       const server = new RedmineServer({
-        address: "http://localhost:3000",
+        address: "https://localhost:3000",
         key: "test-key",
         requestFn: createErrorMockRequest(503, "Service Unavailable"),
       });
@@ -80,7 +80,7 @@ describe("RedmineServer Error Handling", () => {
   describe("4xx Client Errors", () => {
     it("should handle 400 Bad Request with context", async () => {
       const server = new RedmineServer({
-        address: "http://localhost:3000",
+        address: "https://localhost:3000",
         key: "test-key",
         requestFn: createErrorMockRequest(400, "Bad Request"),
       });
@@ -92,7 +92,7 @@ describe("RedmineServer Error Handling", () => {
 
     it("should handle 422 Unprocessable Entity", async () => {
       const server = new RedmineServer({
-        address: "http://localhost:3000",
+        address: "https://localhost:3000",
         key: "test-key",
         requestFn: createErrorMockRequest(422, "Unprocessable Entity"),
       });
@@ -106,7 +106,7 @@ describe("RedmineServer Error Handling", () => {
   describe("Network Errors", () => {
     it("should handle connection refused", async () => {
       const server = new RedmineServer({
-        address: "http://localhost:3000",
+        address: "https://localhost:3000",
         key: "test-key",
         requestFn: createNetworkErrorMockRequest("ECONNREFUSED", "connect ECONNREFUSED"),
       });
@@ -118,7 +118,7 @@ describe("RedmineServer Error Handling", () => {
 
     it("should handle DNS resolution failure", async () => {
       const server = new RedmineServer({
-        address: "http://localhost:3000",
+        address: "https://localhost:3000",
         key: "test-key",
         requestFn: createNetworkErrorMockRequest("ENOTFOUND", "getaddrinfo ENOTFOUND"),
       });
@@ -130,7 +130,7 @@ describe("RedmineServer Error Handling", () => {
 
     it("should handle connection timeout", async () => {
       const server = new RedmineServer({
-        address: "http://localhost:3000",
+        address: "https://localhost:3000",
         key: "test-key",
         requestFn: createNetworkErrorMockRequest("ETIMEDOUT", "connect ETIMEDOUT"),
       });
@@ -142,7 +142,7 @@ describe("RedmineServer Error Handling", () => {
 
     it("should handle connection reset", async () => {
       const server = new RedmineServer({
-        address: "http://localhost:3000",
+        address: "https://localhost:3000",
         key: "test-key",
         requestFn: createNetworkErrorMockRequest("ECONNRESET", "read ECONNRESET"),
       });

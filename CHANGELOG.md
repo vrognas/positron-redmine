@@ -4,6 +4,12 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ## [Unreleased]
 
+### Security
+
+- **BREAKING**: HTTPS now required - HTTP URLs rejected
+- **BREAKING**: TLS certificate validation always enabled
+- Removed `rejectUnauthorized` setting (was insecure default)
+
 ### Fixed
 
 - Silent error catch in IssueController.listActions() now shows errors

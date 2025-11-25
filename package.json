@@ -2,7 +2,7 @@
   "name": "positron-redmine",
   "displayName": "Redmine for Positron",
   "description": "Redmine project management integration for Positron IDE and VS Code",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "publisher": "vrognas",
   "license": "MIT",
   "icon": "logo.png",
@@ -266,12 +266,10 @@
       "properties": {
         "redmine.url": {
           "type": "string",
-          "markdownDescription": "**Redmine server URL**\n\n⚠️ Changing/removing this requires reconfiguring API key\n\n**Storage:**\n- URL: User settings (`settings.json`)\n- API Key: Encrypted secrets (Windows Credential Manager / macOS Keychain / Linux libsecret)\n- API keys are machine-local and never synced",
+          "markdownDescription": "**Redmine server URL (HTTPS required)**\n\n🔒 HTTP connections are not allowed for security.\n\n⚠️ Changing/removing this requires reconfiguring API key\n\n**Storage:**\n- URL: User settings (`settings.json`)\n- API Key: Encrypted secrets (Windows Credential Manager / macOS Keychain / Linux libsecret)\n- API keys are machine-local and never synced",
           "examples": [
             "https://example.com",
-            "http://example.com:8080",
-            "https://example.com:8443/redmine",
-            "http://example.com/redmine"
+            "https://example.com:8443/redmine"
           ],
           "scope": "machine"
         },
@@ -279,12 +277,6 @@
           "type": "string",
           "description": "DEPRECATED: Use 'Redmine: Set API Key' command instead",
           "deprecationMessage": "API keys now stored in VS Code secrets. Run 'Redmine: Set API Key'",
-          "scope": "machine"
-        },
-        "redmine.rejectUnauthorized": {
-          "type": "boolean",
-          "description": "Pass rejectUnauthorized to https request options. Use only if your redmine instance has self-signed certificate!",
-          "default": "false",
           "scope": "machine"
         },
         "redmine.identifier": {

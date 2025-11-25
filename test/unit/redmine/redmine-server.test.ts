@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { RedmineServer } from "../../../src/redmine/redmine-server";
+import {
+  RedmineServer,
+  RedmineOptionsError,
+} from "../../../src/redmine/redmine-server";
 import * as http from "http";
 import { EventEmitter } from "events";
 
@@ -127,7 +130,7 @@ describe("RedmineServer", () => {
 
   beforeEach(() => {
     server = new RedmineServer({
-      address: "http://localhost:3000",
+      address: "https://localhost:3000",
       key: "test-api-key",
       requestFn: createMockRequest(),
     });
@@ -212,15 +215,67 @@ describe("RedmineServer", () => {
 
   it("should compare servers correctly", () => {
     const server2 = new RedmineServer({
-      address: "http://localhost:3000",
+      address: "https://localhost:3000",
       key: "test-api-key",
+      requestFn: createMockRequest(),
     });
     expect(server.compare(server2)).toBe(true);
 
     const server3 = new RedmineServer({
-      address: "http://localhost:3001",
+      address: "https://localhost:3001",
       key: "test-api-key",
+      requestFn: createMockRequest(),
     });
     expect(server.compare(server3)).toBe(false);
+  });
+
+  describe("security validation", () => {
+    it("should reject HTTP URLs", () => {
+      expect(
+        () =>
+          new RedmineServer({
+            address: "http://redmine.example.com",
+            key: "test-api-key",
+          })
+      ).toThrow(RedmineOptionsError);
+      expect(
+        () =>
+          new RedmineServer({
+            address: "http://redmine.example.com",
+            key: "test-api-key",
+          })
+      ).toThrow("HTTPS required");
+    });
+
+    it("should accept HTTPS URLs", () => {
+      expect(
+        () =>
+          new RedmineServer({
+            address: "https://redmine.example.com",
+            key: "test-api-key",
+            requestFn: createMockRequest(),
+          })
+      ).not.toThrow();
+    });
+
+    it("should reject empty address", () => {
+      expect(
+        () =>
+          new RedmineServer({
+            address: "",
+            key: "test-api-key",
+          })
+      ).toThrow(RedmineOptionsError);
+    });
+
+    it("should reject empty API key", () => {
+      expect(
+        () =>
+          new RedmineServer({
+            address: "https://redmine.example.com",
+            key: "",
+          })
+      ).toThrow(RedmineOptionsError);
+    });
   });
 });

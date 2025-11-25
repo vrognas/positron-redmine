@@ -21,20 +21,15 @@ const REQUEST_TIMEOUT_MS = 30000;
 
 export interface RedmineServerConnectionOptions {
   /**
+   * HTTPS URL to Redmine server. HTTP is not allowed.
    * @example https://example.com
-   * @example http://example.com:8080
    * @example https://example.com:8443/redmine
-   * @example http://example.com/redmine
    */
   address: string;
   /**
    * @example 7215ee9c7d9dc229d2921a40e899ec5f
    */
   key: string;
-  /**
-   * @default false
-   */
-  rejectUnauthorized?: boolean;
   /**
    * @example { "Authorization": "Basic YTph" }
    */
@@ -81,8 +76,10 @@ export class RedmineServer {
     } catch {
       throw new RedmineOptionsError(`Invalid URL: ${options.address}`);
     }
-    if (!["https:", "http:"].includes(url.protocol)) {
-      throw new RedmineOptionsError("Protocol must be http/https");
+    if (url.protocol !== "https:") {
+      throw new RedmineOptionsError(
+        "HTTPS required. Redmine URL must start with https://"
+      );
     }
   }
 
@@ -140,8 +137,8 @@ export class RedmineServer {
   }
 
   doRequest<T>(path: string, method: HttpMethods, data?: Buffer): Promise<T> {
-    const { url, key, additionalHeaders, rejectUnauthorized } = this.options;
-    const requestId = Symbol('request'); // Unique ID for hook correlation
+    const { url, key, additionalHeaders } = this.options;
+    const requestId = Symbol("request"); // Unique ID for hook correlation
     const options: https.RequestOptions = {
       hostname: url.hostname,
       port: url.port ? parseInt(url.port, 10) : undefined,
@@ -149,7 +146,7 @@ export class RedmineServer {
         [REDMINE_API_KEY_HEADER_NAME]: key,
         ...additionalHeaders,
       },
-      rejectUnauthorized: rejectUnauthorized,
+      rejectUnauthorized: true, // Always validate TLS certificates
       path: `${url.pathname}${path}`,
       method,
     };
@@ -550,7 +547,6 @@ export class RedmineServer {
     return (
       this.options.address === other.options.address &&
       this.options.key === other.options.key &&
-      this.options.rejectUnauthorized === other.options.rejectUnauthorized &&
       JSON.stringify(this.options.additionalHeaders) ===
         JSON.stringify(other.options.additionalHeaders)
     );

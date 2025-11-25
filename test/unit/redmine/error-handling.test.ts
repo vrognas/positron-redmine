@@ -14,7 +14,7 @@ describe("RedmineServer Error Handling", () => {
 
     it("should throw on empty key", () => {
       expect(
-        () => new RedmineServer({ address: "http://localhost:3000", key: "" })
+        () => new RedmineServer({ address: "https://localhost:3000", key: "" })
       ).toThrow(RedmineOptionsError);
     });
 
@@ -32,8 +32,8 @@ describe("RedmineServer Error Handling", () => {
     });
   });
 
-  describe("https support", () => {
-    it("should use https for https URLs", () => {
+  describe("https enforcement", () => {
+    it("should accept https URLs", () => {
       const server = new RedmineServer({
         address: "https://localhost:3000",
         key: "test",
@@ -41,12 +41,21 @@ describe("RedmineServer Error Handling", () => {
       expect(server.request).toBeDefined();
     });
 
-    it("should use http for http URLs", () => {
-      const server = new RedmineServer({
-        address: "http://localhost:3000",
-        key: "test",
-      });
-      expect(server.request).toBeDefined();
+    it("should reject http URLs", () => {
+      expect(
+        () =>
+          new RedmineServer({
+            address: "http://localhost:3000",
+            key: "test",
+          })
+      ).toThrow(RedmineOptionsError);
+      expect(
+        () =>
+          new RedmineServer({
+            address: "http://localhost:3000",
+            key: "test",
+          })
+      ).toThrow("HTTPS required");
     });
   });
 });
