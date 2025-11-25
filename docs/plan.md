@@ -1,7 +1,7 @@
 # Implementation Plan - Phase 2
 
 **Date**: 2025-11-25
-**Status**: Planning
+**Status**: Ready for implementation
 **Previous**: Phase 1 complete (MVP-1 through MVP-4, v3.6.0)
 
 ---
@@ -74,28 +74,36 @@
 
 **Scope**: Show tracker (Task vs Non-billable) in issue display
 
-**Option selected**: Tooltip + subtle description prefix
+**Decision**: Tooltip-only + dim non-billable issues
 
 **Changes**:
-1. `tree-item-factory.ts`: Add tracker to tooltip
-2. `tree-item-factory.ts`: Optional `$` prefix for Task tracker in description
+1. `tree-item-factory.ts`: Add tracker to tooltip ("**Tracker:** Task")
+2. `tree-item-factory.ts`: Reduce opacity for non-billable issues (gray text)
 
 **Display**:
 ```
-Current:  Fix login bug #123 10/40h 5d On Track
-Proposed: Fix login bug #123 10/40h 5d On Track [Task]
-          or just in tooltip
+Billable:     Fix login bug #123 10/40h 5d On Track     (normal)
+Non-billable: Update docs #124 2/4h 3d On Track        (dimmed/gray)
+```
+
+**Tooltip addition**:
+```markdown
+**#123: Fix login bug**
+**Tracker:** Task
+**Progress:** 10h / 40h
 ```
 
 **Effort**: 30 min
-
-**Decision needed**: Inline indicator vs tooltip-only?
 
 ---
 
 ### Phase 2.2: Sub-Issue Support (P0)
 
 **Scope**: Display parent/child issue relationships
+
+**Decisions**:
+- Tree style: Collapsible parent nodes (like projects tree)
+- Unassigned parents: Show as container even if not directly assigned
 
 **API available**:
 ```
@@ -113,33 +121,39 @@ Issue response includes: parent: { id, name }
    ```
 
 2. **API** (`redmine-server.ts`):
-   - Modify `getIssuesAssignedToMe()` to group by parent
-   - Or: fetch with `include=children` for parent issues
+   - Fetch issues with parent info included
+   - Group by parent_id client-side
+   - Fetch parent issue details if not in assigned list
 
 3. **Tree** (`my-issues-tree.ts`):
-   - Make parent issues collapsible
-   - Show children nested under parent
-   - Aggregate hours in parent tooltip
+   - Top-level: root issues (no parent) + parent containers
+   - Collapsible: parent issues expand to show children
+   - Parent containers shown even if user not directly assigned
+   - Aggregate hours in parent tooltip (sum of children)
 
 **Display**:
 ```
-▶ Parent Task #100 (3 sub-issues)
-  ├─ Sub-task A #101 2/8h
-  ├─ Sub-task B #102 4/8h
-  └─ Sub-task C #103 0/4h
+▶ Parent Task #100 (3 sub-issues)        ← collapsible, even if unassigned
+  ├─ Sub-task A #101 2/8h 5d On Track
+  ├─ Sub-task B #102 4/8h 3d At Risk
+  └─ Sub-task C #103 0/4h 7d On Track
+▶ Standalone Task #105 8/16h 2d On Track ← no parent, still collapsible if has children
 ```
 
-**Effort**: 3-4h
+**Edge cases**:
+- Parent assigned but no children assigned → show parent only (no expand)
+- Child assigned but parent not → fetch parent, show as container
+- Deeply nested (grandchildren) → flatten to 2 levels max
 
-**Questions**:
-1. Show only top-level in tree, expand for children? Or flat with indent?
-2. If assigned to child but not parent, show parent anyway?
+**Effort**: 3-4h
 
 ---
 
 ### Phase 2.3: Issue Relations (P1)
 
 **Scope**: Show blocking dependencies
+
+**Decision**: Eager fetch (relations always visible in tooltip)
 
 **API available**:
 ```
@@ -157,32 +171,40 @@ Relation types: blocks, blocked, precedes, follows, relates, duplicates
      id: number;
      issue_id: number;
      issue_to_id: number;
-     relation_type: 'blocks' | 'blocked' | 'precedes' | 'follows' | ...;
-     delay?: number;
+     relation_type: 'blocks' | 'blocked' | 'precedes' | 'follows' | 'relates' | 'duplicates';
+     delay?: number;  // days, for precedes/follows
    }
    ```
 
 2. **API** (`redmine-server.ts`):
-   - Add `include=relations` to issue fetches
-   - Or separate `getIssueRelations(issueId)` method
+   - Add `include=relations` to `getIssuesAssignedToMe()` fetch
+   - Relations included in initial load, no separate calls
 
 3. **Tree** (`my-issues-tree.ts`):
-   - Add relation info to tooltip
-   - Optional: icon badge for blocked issues
+   - Tooltip: show relations grouped by type
+   - Tree description: add `🚫` icon if blocked by open issue
+   - Blocked issues sorted lower (can't work on them)
 
-**Display (tooltip)**:
-```markdown
-**#123: Fix login bug**
-**Blocked by:** #120 (Database migration)
-**Blocks:** #125, #126
-**Progress:** 10h / 40h
+**Display**:
+```
+Tree item (blocked):
+  🚫 Fix login bug #123 10/40h 5d Blocked
+
+Tooltip:
+  **#123: Fix login bug**
+  **Tracker:** Task
+  **⛔ Blocked by:** #120 (Database migration)
+  **▶ Blocks:** #125, #126
+  **Progress:** 10h / 40h (25%)
 ```
 
-**Effort**: 2-3h
+**Relation display priority** (tooltip order):
+1. `blocked` - most important, can't proceed
+2. `blocks` - others waiting on this
+3. `precedes/follows` - timeline dependencies
+4. `relates/duplicates` - informational
 
-**Questions**:
-1. Show relations in tooltip only, or also in tree description?
-2. Fetch relations eagerly (more API calls) or on-demand (hover)?
+**Effort**: 2-3h
 
 ---
 
@@ -213,19 +235,35 @@ Relation types: blocks, blocked, precedes, follows, relates, duplicates
 
 ---
 
-### Phase 2.5: Gantt Webview (P2 - Future)
+### Phase 2.5: Gantt Webview (P2)
 
 **Scope**: Visual timeline for issues and dependencies
 
-**Deferred** - evaluate after 2.1-2.4 complete
+**Decision**: Keep in plan - users value visual timeline
 
-**Considerations**:
-- VS Code webview complexity (CSP, state, messaging)
-- Visualization library (D3.js vs custom SVG vs vis-timeline)
-- Read-only initially (no drag-to-edit)
-- May not be needed if tree view with relations is sufficient
+**Features**:
+- Horizontal bar chart: issues on Y-axis, time on X-axis
+- Bar = start_date → due_date, filled portion = progress
+- Dependency arrows between related issues
+- Parent/child nesting (collapsible rows)
+- Color coding: billable vs non-billable, risk status
+- Click issue → open actions menu
 
-**Effort**: 8-12h (if pursued)
+**Technical approach**:
+- VS Code Webview panel
+- Read-only (no drag-to-edit) - keeps complexity low
+- Library options:
+  - **vis-timeline** - pre-built Gantt, good for MVP
+  - **D3.js** - more control, higher effort
+  - **Custom SVG** - simplest, limited interactivity
+
+**Implementation sequence**:
+1. Basic timeline with issue bars
+2. Add dependency arrows
+3. Add parent/child grouping
+4. Add click interactions
+
+**Effort**: 8-12h
 
 ---
 
@@ -262,16 +300,19 @@ Relation types: blocks, blocked, precedes, follows, relates, duplicates
 
 ---
 
-## Open Questions
+## Decisions Log
 
-1. **Billable display**: Inline `[Task]` suffix, `$` prefix, or tooltip-only?
-2. **Sub-issue tree**: Flat with indent vs collapsible parent nodes?
-3. **Unassigned parents**: Show parent if only assigned to child?
-4. **Relations fetch**: Eager (all at once) vs lazy (on hover)?
-5. **Gantt necessity**: Re-evaluate after 2.2-2.3 - may be overkill?
+| Question | Decision |
+|----------|----------|
+| Billable display | Tooltip-only + dim non-billable issues |
+| Sub-issue tree style | Collapsible parent nodes (like projects tree) |
+| Unassigned parents | Show as container even if not assigned |
+| Relations fetch | Eager (always visible) |
+| Gantt necessity | Keep - users value visual timeline |
 
 ---
 
 ## Changelog
 
+- 2025-11-25: Resolved all open questions, finalized decisions
 - 2025-11-25: Initial plan created from fit assessment
