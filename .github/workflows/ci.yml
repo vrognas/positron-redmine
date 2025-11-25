@@ -29,7 +29,8 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          # Full history needed for commit validation on ubuntu
+          fetch-depth: ${{ matrix.os == 'ubuntu-latest' && 0 || 1 }}
 
       - name: Validate commit messages
         if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
@@ -63,15 +64,23 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: npx @vscode/vsce ls --no-yarn
 
+      # Coverage only on ubuntu (for Codecov), regular tests on Win/Mac
       - name: Run tests with coverage
+        if: matrix.os == 'ubuntu-latest'
         run: npm run test:coverage
+
+      - name: Run tests
+        if: matrix.os != 'ubuntu-latest'
+        run: npm test
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         if: matrix.os == 'ubuntu-latest'
         continue-on-error: true
 
+      # Only package on ubuntu - Win/Mac just verify tests pass
       - name: Package extension
+        if: matrix.os == 'ubuntu-latest'
         run: npm run package
 
       - name: Check VSIX size
