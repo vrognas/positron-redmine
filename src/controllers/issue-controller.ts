@@ -146,34 +146,47 @@ export class IssueController {
       return;
     }
 
-    const statusChoice = await vscode.window.showQuickPick(
-      possibleStatuses.map((status) => ({
-        label: status.name,
-        status: status,
-      })),
-      {
-        title: `Quick Update (1/3) - #${this.issue.id}`,
-        placeHolder: `Current: ${this.issue.status.name}`,
-      }
-    );
+    // Build status options: "No change" first, then other statuses (excluding current)
+    const currentStatus = new IssueStatus(this.issue.status.id, this.issue.status.name);
+    const statusOptions = [
+      { label: "$(check) No change", status: currentStatus, isNoChange: true },
+      ...possibleStatuses
+        .filter((s) => s.statusId !== this.issue.status.id)
+        .map((status) => ({ label: status.name, status, isNoChange: false })),
+    ];
+
+    const statusChoice = await vscode.window.showQuickPick(statusOptions, {
+      title: `Quick Update (1/3) - #${this.issue.id}`,
+      placeHolder: `Current: ${this.issue.status.name}`,
+    });
     if (!statusChoice) {
       return;
     }
 
     const desiredStatus = statusChoice.status;
 
-    const assigneeChoice = await vscode.window.showQuickPick(
-      memberships.map((membership) => ({
-        label: `${membership.name}${!membership.isUser ? " (group)" : ""}`,
-        assignee: membership,
-      })),
-      {
-        title: `Quick Update (2/3) - #${this.issue.id}`,
-        placeHolder: `Current: ${
-          this.issue.assigned_to ? this.issue.assigned_to.name : "_unassigned_"
-        }`,
-      }
-    );
+    // Build assignee options: "No change" first, then other members (excluding current)
+    const currentAssigneeId = this.issue.assigned_to?.id;
+    const currentAssigneeName = this.issue.assigned_to?.name ?? "_unassigned_";
+    const noChangeAssignee: Membership = currentAssigneeId
+      ? new Membership(currentAssigneeId, currentAssigneeName, true)
+      : new Membership(0, "_unassigned_", true);
+
+    const assigneeOptions = [
+      { label: "$(check) No change", assignee: noChangeAssignee, isNoChange: true },
+      ...memberships
+        .filter((m) => m.id !== currentAssigneeId)
+        .map((membership) => ({
+          label: `${membership.name}${!membership.isUser ? " (group)" : ""}`,
+          assignee: membership,
+          isNoChange: false,
+        })),
+    ];
+
+    const assigneeChoice = await vscode.window.showQuickPick(assigneeOptions, {
+      title: `Quick Update (2/3) - #${this.issue.id}`,
+      placeHolder: `Current: ${currentAssigneeName}`,
+    });
     if (!assigneeChoice) {
       return;
     }

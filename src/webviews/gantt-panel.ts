@@ -69,7 +69,7 @@ export class GanttPanel {
   }
 
   public static createOrShow(server?: RedmineServer): GanttPanel {
-    const column = vscode.ViewColumn.Beside;
+    const column = vscode.ViewColumn.One;
 
     if (GanttPanel.currentPanel) {
       GanttPanel.currentPanel._panel.reveal(column);
