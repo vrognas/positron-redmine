@@ -144,6 +144,71 @@
 
 ---
 
+## Redmine API Patterns
+
+### Efficient Combined Fetch
+
+```
+GET /issues.json?assigned_to_id=me&status_id=open&include=children,relations
+```
+
+Returns all data needed for Phase 2 in single paginated call:
+- Issues with tracker (billable indicator)
+- Children array per issue (sub-issues)
+- Relations array per issue (dependencies)
+
+### API Patterns by Phase
+
+| Phase | Endpoint | Include | Notes |
+|-------|----------|---------|-------|
+| 2.1 | (existing) | - | `tracker.name` already in response |
+| 2.2 | `/issues.json` | `children` | Also: `?parent_id=X` to filter |
+| 2.3 | `/issues.json` | `relations` | Combine with children |
+| 2.4 | `/time_entries.json` | - | No API change, UX only |
+
+### Relation Types
+
+| Type | Direction | Use |
+|------|-----------|-----|
+| `blocked` | I'm blocked by X | 🚫 icon in tree |
+| `blocks` | I block X | Show in tooltip |
+| `precedes` | X must finish first | Timeline (Gantt) |
+| `follows` | I start after X | Timeline (Gantt) |
+| `relates` | General link | Tooltip only |
+| `duplicates` | Same as X | Tooltip only |
+
+### Response Structure
+
+```json
+{
+  "issues": [{
+    "id": 123,
+    "subject": "Task name",
+    "tracker": { "id": 1, "name": "Task" },
+    "parent": { "id": 100 },
+    "children": [{ "id": 124, "subject": "Sub-task" }],
+    "relations": [{
+      "id": 1,
+      "issue_id": 123,
+      "issue_to_id": 99,
+      "relation_type": "blocked",
+      "delay": null
+    }]
+  }]
+}
+```
+
+### Parent Container Fetching
+
+When child assigned but parent not in list:
+```
+GET /issues/[parent_id].json
+```
+
+Fetch parent details to show as container in tree.
+
+---
+
 ## Phased Implementation
 
 ### Phase 2.0: Bug Fixes (P0)
@@ -402,6 +467,7 @@ Tooltip:
 
 ## Changelog
 
+- 2025-11-25: Added Redmine API patterns section
 - 2025-11-25: Added UX guidelines compliance section
 - 2025-11-25: Added VS Code API leverage section from docs research
 - 2025-11-25: Resolved all open questions, finalized decisions
