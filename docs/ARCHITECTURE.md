@@ -92,9 +92,8 @@ activate()
 **Connection Options**:
 ```typescript
 interface RedmineServerConnectionOptions {
-  address: string;           // https://redmine.example.com
-  key: string;               // API key
-  rejectUnauthorized?: boolean; // SSL cert validation
+  address: string;              // HTTPS required (https://redmine.example.com)
+  key: string;                  // API key
   additionalHeaders?: object;   // Custom headers
   requestFn?: typeof http.request; // DI for testing
 }
@@ -278,9 +277,8 @@ getChildren(undefined) → Return cached or [loadingNode]
 
 | Setting | Type | Scope | Description |
 |---------|------|-------|-------------|
-| `redmine.url` | string | machine | Server URL |
+| `redmine.url` | string | machine | Server URL (HTTPS required) |
 | `redmine.apiKey` | string | machine | **DEPRECATED** - use Secrets |
-| `redmine.rejectUnauthorized` | boolean | machine | SSL validation |
 | `redmine.identifier` | string | machine | Default project |
 | `redmine.additionalHeaders` | object | machine | Custom headers |
 | `redmine.logging.enabled` | boolean | machine | API logging |
@@ -344,7 +342,7 @@ getChildren(undefined) → Return cached or [loadingNode]
 
 **Logging Redaction**: Auto-redacts password, api_key, token, secret, auth, authorization, key.
 
-**Network**: HTTPS recommended, `rejectUnauthorized: false` for self-signed certs (caution), 30s timeout.
+**Network**: HTTPS required, TLS certificate validation always enabled, 30s timeout.
 
 ## Extension Points
 

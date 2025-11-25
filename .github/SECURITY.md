@@ -41,23 +41,25 @@ Run: `Redmine: Set API Key` command to migrate from plaintext storage.
 
 See [Migration Guide](../docs/MIGRATION_GUIDE.md).
 
-### Self-Signed Certificates
-`redmine.rejectUnauthorized: false` disables TLS validation.
+### TLS/HTTPS Enforcement (v3.5+)
 
-**Risk**: Man-in-the-middle attacks. Use only for trusted internal servers.
+- **HTTPS Required**: HTTP connections are rejected
+- **Certificate Validation**: Always enabled, no opt-out
+- **Self-signed certs**: Not supported - use valid certificates (Let's Encrypt is free)
+
+**Rationale**: Protects API keys from man-in-the-middle attacks.
 
 ## Known Security Considerations
 
 1. **API Key Scope**: Redmine API keys grant full account access. Extension only performs read operations and limited updates (time entries, status changes).
 
-2. **Network Traffic**: All requests to Redmine server use HTTPS (recommended) or HTTP. No data sent to third parties.
+2. **Network Traffic**: All requests use HTTPS with certificate validation. No data sent to third parties.
 
 3. **Local Storage**: Server URLs stored in workspace settings (may sync via Settings Sync). API keys never sync.
 
 ## Security Best Practices
 
-- Use HTTPS for Redmine server
 - Rotate API keys regularly
 - Use read-only Redmine accounts if possible
-- Review `redmine.additionalHeaders` for sensitive data
-- Disable Settings Sync for workspace with sensitive URLs
+- Review `redmine.additionalHeaders` for sensitive data (it syncs, unlike API keys)
+- Disable Settings Sync for workspaces with sensitive URLs

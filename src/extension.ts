@@ -201,7 +201,6 @@ export function activate(context: vscode.ExtensionContext): void {
           address: config.get<string>("url")!,
           key: (await secretManager.getApiKey(folder.uri))!,
           additionalHeaders: config.get("additionalHeaders"),
-          rejectUnauthorized: config.get("rejectUnauthorized"),
         });
 
         myIssuesTree.setServer(server);
@@ -408,7 +407,7 @@ export function activate(context: vscode.ExtensionContext): void {
   ): Promise<string | undefined> {
     const prompt = currentUrl
       ? "Update your Redmine server URL (changing URL will require new API key)"
-      : "Step 1/2: Enter your Redmine server URL";
+      : "Step 1/2: Enter your Redmine server URL (HTTPS required)";
 
     return await vscode.window.showInputBox({
       prompt,
@@ -416,12 +415,16 @@ export function activate(context: vscode.ExtensionContext): void {
       placeHolder: "https://redmine.example.com",
       validateInput: (value) => {
         if (!value) return "URL cannot be empty";
+        let url: URL;
         try {
-          new URL(value);
-          return null;
+          url = new URL(value);
         } catch {
           return "Invalid URL format";
         }
+        if (url.protocol !== "https:") {
+          return "HTTPS required. URL must start with https://";
+        }
+        return null;
       },
     });
   }
@@ -547,7 +550,6 @@ export function activate(context: vscode.ExtensionContext): void {
       address: config.url,
       key: apiKey,
       additionalHeaders: config.additionalHeaders,
-      rejectUnauthorized: config.rejectUnauthorized,
     });
 
     const fromBucket = bucket.servers.find((s) => s.compare(redmineServer));

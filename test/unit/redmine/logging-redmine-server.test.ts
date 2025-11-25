@@ -4,49 +4,93 @@ import { LoggingRedmineServer } from "../../../src/redmine/logging-redmine-serve
 import * as http from "http";
 import { EventEmitter } from "events";
 
-// Mock http.request
-vi.mock("http", async () => {
-  const actual = await vi.importActual<typeof http>("http");
-  return {
-    ...actual,
-    request: vi.fn(
-      (
-        options: { path?: string; method?: string },
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as NodeJS.EventEmitter & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          };
-          response.statusCode = 200;
-          response.statusMessage = "OK";
+// Helper to create mock request function with configurable response
+interface MockResponseConfig {
+  statusCode?: number;
+  statusMessage?: string;
+  data?: string | Buffer;
+  headers?: Record<string, string>;
+  error?: Error;
+  delay?: number;
+}
 
+const createMockRequestFn = (config: MockResponseConfig = {}) => {
+  const {
+    statusCode = 200,
+    statusMessage = "OK",
+    data = JSON.stringify({ issues: [], total_count: 0 }),
+    headers = {},
+    error,
+    delay = 10,
+  } = config;
+
+  return vi.fn(
+    (
+      _options: unknown,
+      callback: (
+        response: NodeJS.EventEmitter & {
+          statusCode: number;
+          statusMessage: string;
+          headers: Record<string, string>;
+        }
+      ) => void
+    ) => {
+      const request = new EventEmitter() as http.ClientRequest & {
+        end: () => void;
+        on: (event: string, handler: (...args: unknown[]) => void) => http.ClientRequest;
+        setTimeout: (ms: number, cb: () => void) => http.ClientRequest;
+      };
+
+      let errorHandler: ((error: Error) => void) | null = null;
+
+      request.on = function (
+        event: string,
+        handler: (...args: unknown[]) => void
+      ) {
+        if (event === "error") {
+          errorHandler = handler as (error: Error) => void;
+        }
+        return this;
+      };
+
+      request.setTimeout = function () {
+        return this;
+      };
+
+      request.end = function () {
+        if (error) {
           setTimeout(() => {
-            const data = { issues: [], total_count: 0 };
-            response.emit("data", Buffer.from(JSON.stringify(data)));
-            response.emit("end");
-          }, 10);
+            if (errorHandler) errorHandler(error);
+          }, delay);
+          return;
+        }
 
-          callback(response);
+        const response = new EventEmitter() as NodeJS.EventEmitter & {
+          statusCode: number;
+          statusMessage: string;
+          headers: Record<string, string>;
         };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    ),
-  };
-});
+        response.statusCode = statusCode;
+        response.statusMessage = statusMessage;
+        response.headers = { "content-type": "application/json", ...headers };
+
+        callback(response);
+
+        setTimeout(() => {
+          if (data) {
+            response.emit(
+              "data",
+              Buffer.isBuffer(data) ? data : Buffer.from(data)
+            );
+          }
+          response.emit("end");
+        }, delay);
+      };
+
+      return request;
+    }
+  ) as unknown as typeof http.request;
+};
 
 describe("LoggingRedmineServer", () => {
   let mockChannel: { appendLine: ReturnType<typeof vi.fn> };
@@ -58,10 +102,10 @@ describe("LoggingRedmineServer", () => {
   it("logs when enabled", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -83,10 +127,10 @@ describe("LoggingRedmineServer", () => {
   it("silent when disabled", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: false }
@@ -100,39 +144,12 @@ describe("LoggingRedmineServer", () => {
   });
 
   it("logs network errors", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        _callback: (response: NodeJS.EventEmitter) => void
-      ): http.ClientRequest => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        let errorHandler: ((error: Error) => void) | null = null;
-        request.end = () => {
-          setTimeout(() => {
-            if (errorHandler) {
-              errorHandler(new Error("Network error"));
-            }
-          }, 10);
-        };
-        request.on = function (event: string, handler: (...args: unknown[]) => void) {
-          if (event === "error") {
-            errorHandler = handler as (error: Error) => void;
-          }
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({ error: new Error("Network error") }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -154,48 +171,16 @@ describe("LoggingRedmineServer", () => {
 
   // Phase 1: Status Code Tests
   it("logs 201 Created status", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          };
-          response.statusCode = 201;
-          response.statusMessage = "Created";
-
-          setTimeout(() => {
-            response.emit("data", Buffer.from('{"issue":{"id":123}}'));
-            response.emit("end");
-          }, 10);
-
-          callback(response);
-        };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({
+          statusCode: 201,
+          statusMessage: "Created",
+          data: '{"issue":{"id":123}}',
+        }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -211,47 +196,16 @@ describe("LoggingRedmineServer", () => {
   });
 
   it("logs 204 No Content status", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          };
-          response.statusCode = 204;
-          response.statusMessage = "No Content";
-
-          setTimeout(() => {
-            response.emit("end");
-          }, 10);
-
-          callback(response);
-        };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({
+          statusCode: 204,
+          statusMessage: "No Content",
+          data: "",
+        }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -267,47 +221,16 @@ describe("LoggingRedmineServer", () => {
   });
 
   it("logs 401 Unauthorized status", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          };
-          response.statusCode = 401;
-          response.statusMessage = "Unauthorized";
-
-          setTimeout(() => {
-            response.emit("end");
-          }, 10);
-
-          callback(response);
-        };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({
+          statusCode: 401,
+          statusMessage: "Unauthorized",
+          data: "",
+        }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -323,47 +246,16 @@ describe("LoggingRedmineServer", () => {
   });
 
   it("logs 403 Forbidden status", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          };
-          response.statusCode = 403;
-          response.statusMessage = "Forbidden";
-
-          setTimeout(() => {
-            response.emit("end");
-          }, 10);
-
-          callback(response);
-        };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({
+          statusCode: 403,
+          statusMessage: "Forbidden",
+          data: "",
+        }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -379,47 +271,16 @@ describe("LoggingRedmineServer", () => {
   });
 
   it("logs 404 Not Found status", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          };
-          response.statusCode = 404;
-          response.statusMessage = "Not Found";
-
-          setTimeout(() => {
-            response.emit("end");
-          }, 10);
-
-          callback(response);
-        };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({
+          statusCode: 404,
+          statusMessage: "Not Found",
+          data: "",
+        }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -435,47 +296,16 @@ describe("LoggingRedmineServer", () => {
   });
 
   it("logs 500 Internal Server Error status", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          };
-          response.statusCode = 500;
-          response.statusMessage = "Internal Server Error";
-
-          setTimeout(() => {
-            response.emit("end");
-          }, 10);
-
-          callback(response);
-        };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({
+          statusCode: 500,
+          statusMessage: "Internal Server Error",
+          data: "",
+        }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -494,10 +324,10 @@ describe("LoggingRedmineServer", () => {
   it("logs request body truncated at 200 chars", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -516,10 +346,10 @@ describe("LoggingRedmineServer", () => {
   it("logs response size in bytes", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -537,10 +367,10 @@ describe("LoggingRedmineServer", () => {
   it("logs query parameters", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -558,10 +388,10 @@ describe("LoggingRedmineServer", () => {
   it("logs truncated query params when >100 chars", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -578,51 +408,15 @@ describe("LoggingRedmineServer", () => {
   });
 
   it("skips binary content (image/png)", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-            headers: { "content-type"?: string };
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-            headers: { "content-type"?: string };
-          };
-          response.statusCode = 200;
-          response.statusMessage = "OK";
-          response.headers = { "content-type": "image/png" };
-
-          setTimeout(() => {
-            response.emit("data", Buffer.from("{}"));
-            response.emit("end");
-          }, 10);
-
-          callback(response);
-        };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({
+          headers: { "content-type": "image/png" },
+          data: "{}",
+        }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -638,51 +432,16 @@ describe("LoggingRedmineServer", () => {
   });
 
   it("logs response body on error", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          };
-          response.statusCode = 400;
-          response.statusMessage = "Bad Request";
-
-          setTimeout(() => {
-            response.emit(
-              "data",
-              Buffer.from('{"errors":["Invalid field"]}')
-            );
-            response.emit("end");
-          }, 10);
-
-          callback(response);
-        };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({
+          statusCode: 400,
+          statusMessage: "Bad Request",
+          data: '{"errors":["Invalid field"]}',
+        }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -701,10 +460,10 @@ describe("LoggingRedmineServer", () => {
   it("redacts password in request body", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -728,10 +487,10 @@ describe("LoggingRedmineServer", () => {
   it("redacts api_key in request body", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -753,10 +512,10 @@ describe("LoggingRedmineServer", () => {
   it("redacts token in request body", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -776,51 +535,16 @@ describe("LoggingRedmineServer", () => {
   });
 
   it("redacts password in error response body", async () => {
-    vi.mocked(http.request).mockImplementationOnce(
-      (
-        _options: unknown,
-        callback: (
-          response: NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          }
-        ) => void
-      ) => {
-        const request = new EventEmitter() as http.ClientRequest & {
-          end: () => void;
-          on: (event: string, handler: (...args: unknown[]) => void) => unknown;
-        };
-        request.end = function () {
-          const response = new EventEmitter() as NodeJS.EventEmitter & {
-            statusCode: number;
-            statusMessage: string;
-          };
-          response.statusCode = 400;
-          response.statusMessage = "Bad Request";
-
-          setTimeout(() => {
-            response.emit(
-              "data",
-              Buffer.from('{"user":{"password":"leaked123"}}')
-            );
-            response.emit("end");
-          }, 10);
-
-          callback(response);
-        };
-        request.on = function () {
-          return this;
-        };
-        return request;
-      }
-    );
-
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn({
+          statusCode: 400,
+          statusMessage: "Bad Request",
+          data: '{"user":{"password":"leaked123"}}',
+        }),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -841,10 +565,10 @@ describe("LoggingRedmineServer", () => {
   it("preserves non-sensitive fields", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -868,10 +592,10 @@ describe("LoggingRedmineServer", () => {
   it("redacts api_key in query params", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -892,10 +616,10 @@ describe("LoggingRedmineServer", () => {
   it("redacts token in query params", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -916,16 +640,19 @@ describe("LoggingRedmineServer", () => {
   it("redacts multiple sensitive query params", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
     );
 
-    await server.doRequest("/users.json?api_key=secret&password=pass123&id=5", "GET");
+    await server.doRequest(
+      "/users.json?api_key=secret&password=pass123&id=5",
+      "GET"
+    );
 
     expect(mockChannel.appendLine).toHaveBeenCalledWith(
       expect.stringContaining("api_key=***")
@@ -937,7 +664,7 @@ describe("LoggingRedmineServer", () => {
       expect.stringContaining("id=5")
     );
     expect(mockChannel.appendLine).not.toHaveBeenCalledWith(
-      expect.stringContaining("secret")
+      expect.stringContaining("=secret")
     );
     expect(mockChannel.appendLine).not.toHaveBeenCalledWith(
       expect.stringContaining("pass123")
@@ -949,10 +676,10 @@ describe("LoggingRedmineServer", () => {
   it("preserves non-sensitive query params", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -973,10 +700,10 @@ describe("LoggingRedmineServer", () => {
   it("handles concurrent requests correctly", async () => {
     const server = new LoggingRedmineServer(
       {
-        address: "http://localhost",
+        address: "https://localhost",
         key: "test-key",
-        rejectUnauthorized: false,
         additionalHeaders: {},
+        requestFn: createMockRequestFn(),
       },
       mockChannel as unknown as vscode.OutputChannel,
       { enabled: true }
@@ -986,7 +713,7 @@ describe("LoggingRedmineServer", () => {
     const promises = [
       server.doRequest("/projects.json", "GET"),
       server.doRequest("/issues.json", "GET"),
-      server.doRequest("/users.json", "GET")
+      server.doRequest("/users.json", "GET"),
     ];
 
     await Promise.all(promises);

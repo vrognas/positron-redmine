@@ -33,7 +33,7 @@ describe("createIssueTreeItem", () => {
   });
 
   it("should set command with issue id", () => {
-    const server = { options: { address: "http://test.com" } };
+    const server = { options: { address: "https://test.com" } };
     const treeItem = createIssueTreeItem(
       mockIssue,
       server,
