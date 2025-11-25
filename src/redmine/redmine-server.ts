@@ -472,7 +472,23 @@ export class RedmineServer {
   }
 
   /**
+   * Batch fetch issues by IDs (for parent containers)
+   * @param ids Array of issue IDs to fetch
+   */
+  async getIssuesByIds(ids: number[]): Promise<Issue[]> {
+    if (ids.length === 0) return [];
+
+    // Redmine supports comma-separated IDs filter
+    const response = await this.doRequest<{
+      issues: Issue[];
+    }>(`/issues.json?issue_id=${ids.join(",")}&status_id=*`, "GET");
+
+    return response?.issues || [];
+  }
+
+  /**
    * Returns promise, that resolves to list of issues assigned to api key owner
+   * Includes children and relations for hierarchy/dependency display
    */
   async getIssuesAssignedToMe(): Promise<{ issues: Issue[] }> {
     const req = async (
@@ -489,7 +505,7 @@ export class RedmineServer {
         issues: Issue[];
         total_count: number;
       }>(
-        `/issues.json?status_id=open&assigned_to_id=me&limit=${limit}&offset=${offset}`,
+        `/issues.json?status_id=open&assigned_to_id=me&include=children,relations&limit=${limit}&offset=${offset}`,
         "GET"
       );
 
