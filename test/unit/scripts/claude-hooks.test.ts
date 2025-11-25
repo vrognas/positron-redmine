@@ -2,11 +2,13 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { execSync } from "child_process";
 import { unlinkSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
-import { tmpdir } from "os";
+import { tmpdir, platform } from "os";
 
 const SCRIPTS_DIR = join(__dirname, "../../../scripts/hooks");
+const isWindows = platform() === "win32";
 
-describe("context-inject hook", () => {
+// These hooks only run in Claude Code Web (Linux) - skip on Windows
+describe.skipIf(isWindows)("context-inject hook", () => {
   const HOOK_PATH = join(SCRIPTS_DIR, "context-inject.sh");
 
   it("should output git branch info", () => {
@@ -35,7 +37,8 @@ describe("context-inject hook", () => {
   });
 });
 
-describe("pre-compact-log hook", () => {
+// These hooks only run in Claude Code Web (Linux) - skip on Windows
+describe.skipIf(isWindows)("pre-compact-log hook", () => {
   const HOOK_PATH = join(SCRIPTS_DIR, "pre-compact-log.sh");
   const LOG_DIR = join(tmpdir(), "claude-test-" + Date.now());
   const LOG_FILE = join(LOG_DIR, "compaction-log.txt");
