@@ -103,6 +103,10 @@
 
 ### Webview (2.5)
 
+**⚠️ VS Code guideline: Webviews are "last resort only"** - use native API when possible.
+
+**Justification for Gantt**: No native VS Code API for timeline/Gantt visualization. Tree views cannot represent temporal data on X-axis. Webview is the only option.
+
 | Guideline | Action |
 |-----------|--------|
 | Handle resize/reflow | Test at arbitrary panel sizes |
@@ -110,6 +114,7 @@
 | ARIA labels | Add to timeline items |
 | Keyboard navigation | Arrow keys, Tab support |
 | Virtualize long lists | Render only visible tasks |
+| Avoid anti-patterns | No promotions, no wizards, no update popups |
 
 ### Quick Picks (2.4)
 
@@ -124,16 +129,22 @@
 | Guideline | Action |
 |-----------|--------|
 | Avoid modal spam | Use status bar flash (existing) |
-| "Don't show again" | Add for repetitive confirmations |
+| "Don't show again" | **Required on every notification** |
 | Contextual errors | Include retry/view logs actions |
+| Information | No required actions |
+| Warning | Issues requiring user input + resolution |
+| Error | Failures + corrective actions |
 
 ### Settings (New)
 
-| Setting | Type | Default | Scope |
-|---------|------|---------|-------|
-| `redmine.ui.dimNonBillable` | boolean | `true` | application |
-| `redmine.ui.showRelations` | boolean | `true` | application |
-| `redmine.gantt.enabled` | boolean | `false` | application |
+**Naming**: `extensionName.settingName` format (dots for hierarchy)
+**Scope**: `application` = user settings only, synced across devices
+
+| Setting | Type | Default | Scope | Description |
+|---------|------|---------|-------|-------------|
+| `redmine.ui.dimNonBillable` | boolean | `true` | application | Dim non-billable issues in tree views |
+| `redmine.ui.showRelations` | boolean | `true` | application | Show issue relations in tooltips |
+| `redmine.gantt.enabled` | boolean | `false` | application | Enable Gantt timeline view |
 
 ### Not Adding (Avoid Over-Engineering)
 
@@ -153,29 +164,38 @@ GET /issues.json?assigned_to_id=me&status_id=open&include=children,relations
 ```
 
 Returns all data needed for Phase 2 in single paginated call:
-- Issues with tracker (billable indicator)
+- Issues with tracker (billable indicator) - **always included, no param needed**
 - Children array per issue (sub-issues)
 - Relations array per issue (dependencies)
+
+**Pagination**: `?offset=0&limit=100` (no documented max)
 
 ### API Patterns by Phase
 
 | Phase | Endpoint | Include | Notes |
 |-------|----------|---------|-------|
-| 2.1 | (existing) | - | `tracker.name` already in response |
+| 2.1 | (existing) | - | `tracker` always in response (id + name) |
 | 2.2 | `/issues.json` | `children` | Also: `?parent_id=X` to filter |
 | 2.3 | `/issues.json` | `relations` | Combine with children |
 | 2.4 | `/time_entries.json` | - | No API change, UX only |
 
-### Relation Types
+### Relation Types (DIRECTIONAL)
 
-| Type | Direction | Use |
-|------|-----------|-----|
-| `blocked` | I'm blocked by X | 🚫 icon in tree |
-| `blocks` | I block X | Show in tooltip |
-| `precedes` | X must finish first | Timeline (Gantt) |
-| `follows` | I start after X | Timeline (Gantt) |
-| `relates` | General link | Tooltip only |
-| `duplicates` | Same as X | Tooltip only |
+**Critical**: Relations are directional, not bidirectional. Each direction is a separate type.
+
+| Type | Inverse | Direction | Use |
+|------|---------|-----------|-----|
+| `blocked` | `blocks` | I'm blocked by X | 🚫 icon in tree |
+| `blocks` | `blocked` | I block X | Show in tooltip |
+| `precedes` | `follows` | X must finish before me | Timeline |
+| `follows` | `precedes` | I start after X | Timeline |
+| `relates` | `relates` | General link (symmetric) | Tooltip only |
+| `duplicates` | `duplicated` | I duplicate X | Tooltip only |
+| `duplicated` | `duplicates` | X duplicates me | Tooltip only |
+| `copied_to` | `copied_from` | I was copied to X | Tooltip only |
+| `copied_from` | `copied_to` | I was copied from X | Tooltip only |
+
+**Implication**: When checking "am I blocked?", check for `blocked` type in relations array.
 
 ### Response Structure
 
@@ -381,6 +401,20 @@ function renderGanttSVG(issues: Issue[]): string {
 
 ### Webview Implementation (Phase 2.5)
 
+**createWebviewPanel() call:**
+```typescript
+const panel = vscode.window.createWebviewPanel(
+  'redmineGantt',           // viewType (internal)
+  'Redmine Gantt',          // title (user-visible)
+  vscode.ViewColumn.One,    // editor column
+  {
+    enableScripts: true,
+    retainContextWhenHidden: true,  // preserve state on hide
+    localResourceRoots: [extensionUri]
+  }
+);
+```
+
 **CSP meta tag (required):**
 ```html
 <meta http-equiv="Content-Security-Policy"
@@ -421,6 +455,22 @@ const vscode = acquireVsCodeApi();
 function handleIssueClick(issueId) {
   vscode.postMessage({ command: 'issueClick', issueId });
 }
+```
+
+**Theming (CSS variables):**
+```css
+/* Use VS Code theme tokens - dots become hyphens */
+body {
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+}
+.issue-bar {
+  fill: var(--vscode-button-background);
+}
+.blocked-bar {
+  fill: var(--vscode-errorForeground);
+}
+/* Theme detection via body class: .vscode-light, .vscode-dark, .vscode-high-contrast */
 ```
 
 ---
@@ -540,7 +590,7 @@ Relation types: blocks, blocked, precedes, follows, relates, duplicates
      id: number;
      issue_id: number;
      issue_to_id: number;
-     relation_type: 'blocks' | 'blocked' | 'precedes' | 'follows' | 'relates' | 'duplicates';
+     relation_type: 'relates' | 'duplicates' | 'duplicated' | 'blocks' | 'blocked' | 'precedes' | 'follows' | 'copied_to' | 'copied_from';
      delay?: number;  // days, for precedes/follows
    }
    ```
@@ -686,6 +736,15 @@ Tooltip:
 
 ## Changelog
 
+- 2025-11-25: **Second validation pass** - validated against official Redmine/VS Code docs
+  - **Critical fix**: Relations are DIRECTIONAL (blocks≠blocked, duplicates≠duplicated)
+  - Added all 9 relation types (was 6)
+  - Tracker always included in API response (confirmed)
+  - Added webview "last resort" warning + justification
+  - Settings: added proper naming conventions and scope docs
+  - Notifications: "Do not show again" now required on all
+  - Webview: added createWebviewPanel params, theming CSS vars
+  - Added pagination info to API section
 - 2025-11-25: Comprehensive validation pass - added Implementation Details section
   - Type design for ParentContainer
   - Parent fetching strategy and error handling
