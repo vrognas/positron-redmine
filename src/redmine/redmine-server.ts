@@ -415,6 +415,28 @@ export class RedmineServer {
     );
   }
 
+  /**
+   * Update issue start_date and/or due_date
+   */
+  updateIssueDates(
+    issueId: number,
+    startDate: string | null,
+    dueDate: string | null
+  ): Promise<unknown> {
+    const issueUpdate: { start_date?: string; due_date?: string } = {};
+    if (startDate !== null) {
+      issueUpdate.start_date = startDate;
+    }
+    if (dueDate !== null) {
+      issueUpdate.due_date = dueDate;
+    }
+    return this.doRequest(
+      `/issues/${issueId}.json`,
+      "PUT",
+      Buffer.from(JSON.stringify({ issue: issueUpdate }), "utf8")
+    );
+  }
+
   issueStatuses: { issue_statuses: RedmineIssueStatus[] } | null = null;
 
   /**

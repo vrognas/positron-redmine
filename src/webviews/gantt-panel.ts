@@ -119,7 +119,12 @@ export class GanttPanel {
     this._panel.webview.html = this._getHtmlContent();
   }
 
-  private _handleMessage(message: { command: string; issueId?: number }): void {
+  private _handleMessage(message: {
+    command: string;
+    issueId?: number;
+    startDate?: string | null;
+    dueDate?: string | null;
+  }): void {
     switch (message.command) {
       case "openIssue":
         if (message.issueId && this._server) {
@@ -131,6 +136,39 @@ export class GanttPanel {
           );
         }
         break;
+      case "updateDates":
+        if (message.issueId && this._server) {
+          this._updateIssueDates(
+            message.issueId,
+            message.startDate ?? null,
+            message.dueDate ?? null
+          );
+        }
+        break;
+    }
+  }
+
+  private async _updateIssueDates(
+    issueId: number,
+    startDate: string | null,
+    dueDate: string | null
+  ): Promise<void> {
+    if (!this._server) return;
+
+    try {
+      await this._server.updateIssueDates(issueId, startDate, dueDate);
+      // Update local data and refresh
+      const issue = this._issues.find((i) => i.id === issueId);
+      if (issue) {
+        if (startDate !== null) issue.start_date = startDate;
+        if (dueDate !== null) issue.due_date = dueDate;
+      }
+      this._updateContent();
+      vscode.window.showInformationMessage(`Issue #${issueId} dates updated`);
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Failed to update dates: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -238,10 +276,18 @@ export class GanttPanel {
           `Spent: ${formatHoursAsTime(issue.spent_hours)}`,
         ].join("\n");
 
+        const handleWidth = 8;
         return `
-          <g class="issue-bar" data-issue-id="${issue.id}" style="cursor: pointer;">
-            <rect x="${startX}" y="${y}" width="${width}" height="${barHeight}"
-                  fill="${color}" rx="4" ry="4" opacity="0.8"/>
+          <g class="issue-bar" data-issue-id="${issue.id}"
+             data-start-date="${issue.start_date || ""}"
+             data-due-date="${issue.due_date || ""}"
+             data-start-x="${startX}" data-end-x="${endX}">
+            <rect class="bar-main" x="${startX}" y="${y}" width="${width}" height="${barHeight}"
+                  fill="${color}" rx="4" ry="4" opacity="0.8" style="cursor: pointer;"/>
+            <rect class="drag-handle drag-left" x="${startX}" y="${y}" width="${handleWidth}" height="${barHeight}"
+                  fill="transparent" style="cursor: ew-resize;"/>
+            <rect class="drag-handle drag-right" x="${startX + width - handleWidth}" y="${y}" width="${handleWidth}" height="${barHeight}"
+                  fill="transparent" style="cursor: ew-resize;"/>
             <title>${tooltip}</title>
           </g>
         `;
@@ -309,7 +355,9 @@ export class GanttPanel {
       border-radius: 4px;
     }
     svg { display: block; }
-    .issue-bar:hover rect, .issue-label:hover { opacity: 0.8; }
+    .issue-bar:hover .bar-main, .issue-label:hover { opacity: 0.8; }
+    .issue-bar .drag-handle:hover { fill: rgba(255,255,255,0.3); }
+    .issue-bar.dragging .bar-main { opacity: 0.5; }
     .weekend-bg { fill: var(--vscode-editor-inactiveSelectionBackground); opacity: 0.3; }
     .day-grid { stroke: var(--vscode-editorRuler-foreground); stroke-width: 0.5; opacity: 0.3; }
     .date-marker { stroke: var(--vscode-editorRuler-foreground); stroke-dasharray: 2,2; }
@@ -333,12 +381,106 @@ export class GanttPanel {
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    document.querySelectorAll('.issue-bar, .issue-label').forEach(el => {
+    const timelineWidth = ${timelineWidth};
+    const minDateMs = ${minDate.getTime()};
+    const maxDateMs = ${maxDate.getTime()};
+
+    // Convert x position to date string (YYYY-MM-DD)
+    function xToDate(x) {
+      const ms = minDateMs + (x / timelineWidth) * (maxDateMs - minDateMs);
+      const d = new Date(ms);
+      return d.toISOString().slice(0, 10);
+    }
+
+    // Drag state
+    let dragState = null;
+
+    // Handle drag start on handles
+    document.querySelectorAll('.drag-handle').forEach(handle => {
+      handle.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        const bar = handle.closest('.issue-bar');
+        const isLeft = handle.classList.contains('drag-left');
+        const issueId = parseInt(bar.dataset.issueId);
+        const startX = parseFloat(bar.dataset.startX);
+        const endX = parseFloat(bar.dataset.endX);
+        const barMain = bar.querySelector('.bar-main');
+        const leftHandle = bar.querySelector('.drag-left');
+        const rightHandle = bar.querySelector('.drag-right');
+
+        bar.classList.add('dragging');
+        dragState = {
+          issueId,
+          isLeft,
+          initialMouseX: e.clientX,
+          startX,
+          endX,
+          barMain,
+          leftHandle,
+          rightHandle,
+          bar
+        };
+      });
+    });
+
+    // Handle click on bar (open issue) - only if not dragging
+    document.querySelectorAll('.issue-bar .bar-main').forEach(bar => {
+      bar.addEventListener('click', (e) => {
+        if (dragState) return;
+        const issueId = parseInt(bar.closest('.issue-bar').dataset.issueId);
+        vscode.postMessage({ command: 'openIssue', issueId });
+      });
+    });
+
+    // Labels click
+    document.querySelectorAll('.issue-label').forEach(el => {
       el.addEventListener('click', () => {
         const issueId = parseInt(el.dataset.issueId);
         vscode.postMessage({ command: 'openIssue', issueId });
       });
     });
+
+    // Handle drag move
+    document.addEventListener('mousemove', (e) => {
+      if (!dragState) return;
+      const delta = e.clientX - dragState.initialMouseX;
+      let newStartX = dragState.startX;
+      let newEndX = dragState.endX;
+
+      if (dragState.isLeft) {
+        newStartX = Math.max(0, Math.min(dragState.startX + delta, dragState.endX - 20));
+      } else {
+        newEndX = Math.max(dragState.startX + 20, Math.min(dragState.endX + delta, timelineWidth));
+      }
+
+      // Update visual
+      const width = newEndX - newStartX;
+      dragState.barMain.setAttribute('x', newStartX);
+      dragState.barMain.setAttribute('width', width);
+      dragState.leftHandle.setAttribute('x', newStartX);
+      dragState.rightHandle.setAttribute('x', newEndX - 8);
+      dragState.newStartX = newStartX;
+      dragState.newEndX = newEndX;
+    });
+
+    // Handle drag end
+    document.addEventListener('mouseup', () => {
+      if (!dragState) return;
+      const { issueId, isLeft, newStartX, newEndX, bar, startX, endX } = dragState;
+      bar.classList.remove('dragging');
+
+      // Only update if position changed
+      if (newStartX !== undefined || newEndX !== undefined) {
+        const startDate = isLeft && newStartX !== startX ? xToDate(newStartX) : null;
+        const dueDate = !isLeft && newEndX !== endX ? xToDate(newEndX) : null;
+
+        if (startDate || dueDate) {
+          vscode.postMessage({ command: 'updateDates', issueId, startDate, dueDate });
+        }
+      }
+      dragState = null;
+    });
+
     // Auto-scroll to today marker (centered)
     const timeline = document.querySelector('.gantt-timeline');
     const todayX = ${Math.round(todayX)};
