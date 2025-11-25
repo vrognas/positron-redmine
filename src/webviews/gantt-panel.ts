@@ -170,7 +170,7 @@ export class GanttPanel {
       (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    const timelineWidth = Math.max(600, totalDays * 20);
+    const timelineWidth = Math.max(600, totalDays * 40);
     const labelWidth = 200;
     const barHeight = 30;
     const barGap = 10;
@@ -311,6 +311,7 @@ export class GanttPanel {
     svg { display: block; }
     .issue-bar:hover rect, .issue-label:hover { opacity: 0.8; }
     .weekend-bg { fill: var(--vscode-editor-inactiveSelectionBackground); opacity: 0.3; }
+    .day-grid { stroke: var(--vscode-editorRuler-foreground); stroke-width: 0.5; opacity: 0.3; }
     .date-marker { stroke: var(--vscode-editorRuler-foreground); stroke-dasharray: 2,2; }
     .today-marker { stroke: var(--vscode-charts-red); stroke-width: 2; }
   </style>
@@ -442,10 +443,15 @@ export class GanttPanel {
         `);
       }
 
+      // Day grid line (subtle vertical separator)
+      dayHeaders.push(`
+        <line x1="${x}" y1="35" x2="${x}" y2="100%" class="day-grid"/>
+      `);
+
       // Day header (bottom row) - show day number and weekday
       const dayLabel = `${current.getDate()} ${WEEKDAYS_SHORT[dayOfWeek]}`;
       dayHeaders.push(`
-        <text x="${x + dayWidth / 2}" y="30" fill="var(--vscode-descriptionForeground)" font-size="9" text-anchor="middle">${dayLabel}</text>
+        <text x="${x + dayWidth / 2}" y="30" fill="var(--vscode-descriptionForeground)" font-size="10" text-anchor="middle">${dayLabel}</text>
       `);
 
       // Today marker
