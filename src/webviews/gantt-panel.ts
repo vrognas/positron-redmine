@@ -968,12 +968,6 @@ export class GanttPanel {
           const arrowSize = 6;
           const sameRow = Math.abs(source.y - target.y) < 5;
 
-          // Find shortest path by comparing connection options
-          // Option A: source.end → target.start (natural flow, target to right)
-          // Option B: source.start → target.end (target to left, shorter path)
-          const distEndToStart = Math.abs(source.endX - target.startX);
-          const distStartToEnd = Math.abs(source.startX - target.endX);
-
           // Determine if bars overlap horizontally
           const barsOverlap = source.startX < target.endX && source.endX > target.startX;
 
@@ -983,7 +977,6 @@ export class GanttPanel {
 
           if (barsOverlap) {
             // Bars overlap - must route around vertically
-            // Use source.end → target.start with vertical routing
             x1 = source.endX + 2;
             y1 = source.y;
             x2 = target.startX - 2;
@@ -995,7 +988,7 @@ export class GanttPanel {
             const routeY = y2 > y1 ? Math.max(y1, y2) + barHeight : Math.min(y1, y2) - barHeight;
             path = `M ${x1} ${y1} H ${midX} V ${routeY} H ${x2 - gap} V ${y2} H ${x2 - arrowSize}`;
           } else if (target.startX > source.endX) {
-            // Target is to the right - use end → start
+            // Target is to the right - source.end → target.start
             x1 = source.endX + 2;
             y1 = source.y;
             x2 = target.startX - 2;
@@ -1003,20 +996,16 @@ export class GanttPanel {
             pointsRight = true;
 
             if (sameRow) {
-              path = `M ${x1} ${y1} L ${x2 - arrowSize} ${y2}`;
+              // Same row: straight horizontal line
+              path = `M ${x1} ${y1} H ${x2 - arrowSize}`;
             } else {
-              const horizontalGap = x2 - x1;
-              const maxElbow = Math.max(0, horizontalGap - arrowSize - 2);
-              const elbowGap = Math.min(maxElbow, Math.max(8, Math.min(20, horizontalGap / 2)));
-              if (elbowGap < 4) {
-                path = `M ${x1} ${y1} L ${x2 - arrowSize} ${y2}`;
-              } else {
-                const midX = x1 + elbowGap;
-                path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`;
-              }
+              // Different row: 3-segment elbow (H → V → H)
+              // Turn at midpoint between bars for balanced appearance
+              const midX = (x1 + x2) / 2;
+              path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`;
             }
           } else {
-            // Target is to the left - use start → end (shortest path)
+            // Target is to the left - source.start → target.end (shortest)
             x1 = source.startX - 2;
             y1 = source.y;
             x2 = target.endX + 2;
@@ -1024,17 +1013,12 @@ export class GanttPanel {
             pointsRight = false;
 
             if (sameRow) {
-              path = `M ${x1} ${y1} L ${x2 + arrowSize} ${y2}`;
+              // Same row: straight horizontal line
+              path = `M ${x1} ${y1} H ${x2 + arrowSize}`;
             } else {
-              const horizontalGap = x1 - x2;
-              const maxElbow = Math.max(0, horizontalGap - arrowSize - 2);
-              const elbowGap = Math.min(maxElbow, Math.max(8, Math.min(20, horizontalGap / 2)));
-              if (elbowGap < 4) {
-                path = `M ${x1} ${y1} L ${x2 + arrowSize} ${y2}`;
-              } else {
-                const midX = x1 - elbowGap;
-                path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 + arrowSize}`;
-              }
+              // Different row: 3-segment elbow (H → V → H)
+              const midX = (x1 + x2) / 2;
+              path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 + arrowSize}`;
             }
           }
 
