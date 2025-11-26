@@ -645,10 +645,13 @@ export class GanttPanel {
       const { issueId, isLeft, newStartX, newEndX, bar, startX, endX, oldStartDate, oldDueDate } = dragState;
       bar.classList.remove('dragging');
 
-      // Only update if position changed
+      // Only update if date actually changed (not just pixels)
       if (newStartX !== undefined || newEndX !== undefined) {
-        const newStartDate = isLeft && newStartX !== startX ? xToDate(newStartX) : null;
-        const newDueDate = !isLeft && newEndX !== endX ? xToDate(newEndX) : null;
+        const calcStartDate = isLeft && newStartX !== startX ? xToDate(newStartX) : null;
+        const calcDueDate = !isLeft && newEndX !== endX ? xToDate(newEndX) : null;
+        // Skip if date is same as original
+        const newStartDate = calcStartDate && calcStartDate !== oldStartDate ? calcStartDate : null;
+        const newDueDate = calcDueDate && calcDueDate !== oldDueDate ? calcDueDate : null;
 
         if (newStartDate || newDueDate) {
           // Push to undo stack before making change
