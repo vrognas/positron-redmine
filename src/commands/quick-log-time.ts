@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ActionProperties } from "./action-properties";
 import { parseTimeInput, validateTimeInput } from "../utilities/time-input";
+import { showStatusBarMessage } from "../utilities/status-bar";
 
 interface RecentTimeLog {
   issueId: number;
@@ -114,15 +115,9 @@ export async function quickLogTime(
     });
 
     // 8. Confirm with status bar flash (NOT notification)
-    const statusBar = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right
+    showStatusBarMessage(
+      `$(check) Logged ${hours.toFixed(2).replace(/\.?0+$/, "")}h to #${selection.issueId}`
     );
-    statusBar.text = `$(check) Logged ${hours.toFixed(2).replace(/\.?0+$/, "")}h to #${selection.issueId}`;
-    statusBar.show();
-    setTimeout(() => {
-      statusBar.hide();
-      statusBar.dispose();
-    }, 3000);
   } catch (error) {
     vscode.window.showErrorMessage(
       `Failed to log time: ${error instanceof Error ? error.message : String(error)}`

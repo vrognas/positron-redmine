@@ -6,6 +6,7 @@ import { IssueStatus as RedmineIssueStatus } from "../redmine/models/issue-statu
 import { TimeEntryActivity } from "../redmine/models/time-entry-activity";
 import { errorToString } from "../utilities/error-to-string";
 import { parseTimeInput, validateTimeInput } from "../utilities/time-input";
+import { showStatusBarMessage } from "../utilities/status-bar";
 
 interface TimeEntryActivityItem extends vscode.QuickPickItem {
   activity: TimeEntryActivity;
@@ -71,15 +72,9 @@ export class IssueController {
       );
 
       // Status bar confirmation (matches QuickLogTime UX)
-      const statusBar = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right
+      showStatusBarMessage(
+        `$(check) Logged ${hours.toFixed(2).replace(/\.?0+$/, "")}h to #${this.issue.id}`
       );
-      statusBar.text = `$(check) Logged ${hours.toFixed(2).replace(/\.?0+$/, "")}h to #${this.issue.id}`;
-      statusBar.show();
-      setTimeout(() => {
-        statusBar.hide();
-        statusBar.dispose();
-      }, 3000);
     } catch (error) {
       vscode.window.showErrorMessage(errorToString(error));
     }

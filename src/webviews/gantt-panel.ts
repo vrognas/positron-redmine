@@ -2,14 +2,17 @@ import * as vscode from "vscode";
 import { Issue } from "../redmine/models/issue";
 import { RedmineServer } from "../redmine/redmine-server";
 import { FlexibilityScore } from "../utilities/flexibility-calculator";
+import { showStatusBarMessage } from "../utilities/status-bar";
 
-type ZoomLevel = "day" | "week" | "month";
+type ZoomLevel = "day" | "week" | "month" | "quarter" | "year";
 
 // Pixels per day for each zoom level
 const ZOOM_PIXELS_PER_DAY: Record<ZoomLevel, number> = {
   day: 40,
   week: 15,
   month: 5,
+  quarter: 2,
+  year: 0.8,
 };
 
 interface GanttRelation {
@@ -363,23 +366,15 @@ export class GanttPanel {
 
     try {
       await this._server.updateIssueDates(issueId, startDate, dueDate);
-      // Update local data only (UI already updated via drag - optimistic)
+      // Update local data
       const issue = this._issues.find((i) => i.id === issueId);
       if (issue) {
         if (startDate !== null) issue.start_date = startDate;
         if (dueDate !== null) issue.due_date = dueDate;
       }
-      // No _updateContent() - UI already reflects change from drag
-      // Status bar confirmation (brief, non-intrusive)
-      const statusBar = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right
-      );
-      statusBar.text = `$(check) #${issueId} dates saved`;
-      statusBar.show();
-      setTimeout(() => {
-        statusBar.hide();
-        statusBar.dispose();
-      }, 2000);
+      // Re-render to reflect changes (needed for undo/redo)
+      this._updateContent();
+      showStatusBarMessage(`$(check) #${issueId} dates saved`, 2000);
     } catch (error) {
       // On error, re-render to reset UI to correct state
       this._updateContent();
@@ -399,15 +394,7 @@ export class GanttPanel {
         issue.relations = issue.relations.filter((r) => r.id !== relationId);
       }
       this._updateContent();
-      const statusBar = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right
-      );
-      statusBar.text = "$(check) Relation deleted";
-      statusBar.show();
-      setTimeout(() => {
-        statusBar.hide();
-        statusBar.dispose();
-      }, 2000);
+      showStatusBarMessage("$(check) Relation deleted", 2000);
     } catch (error) {
       vscode.window.showErrorMessage(
         `Failed to delete relation: ${error instanceof Error ? error.message : String(error)}`
@@ -432,15 +419,7 @@ export class GanttPanel {
       await this._server.createRelation(issueId, targetIssueId, relationType);
       // Refresh by triggering a full reload via VS Code command
       vscode.commands.executeCommand("redmine.refreshIssues");
-      const statusBar = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right
-      );
-      statusBar.text = `$(check) ${labels[relationType]} relation created`;
-      statusBar.show();
-      setTimeout(() => {
-        statusBar.hide();
-        statusBar.dispose();
-      }, 2000);
+      showStatusBarMessage(`$(check) ${labels[relationType]} relation created`, 2000);
     } catch (error) {
       vscode.window.showErrorMessage(
         `Failed to create relation: ${error instanceof Error ? error.message : String(error)}`
@@ -849,6 +828,8 @@ export class GanttPanel {
         <button id="zoomDay" class="${this._zoomLevel === "day" ? "active" : ""}" title="Day view">Day</button>
         <button id="zoomWeek" class="${this._zoomLevel === "week" ? "active" : ""}" title="Week view">Week</button>
         <button id="zoomMonth" class="${this._zoomLevel === "month" ? "active" : ""}" title="Month view">Month</button>
+        <button id="zoomQuarter" class="${this._zoomLevel === "quarter" ? "active" : ""}" title="Quarter view">Quarter</button>
+        <button id="zoomYear" class="${this._zoomLevel === "year" ? "active" : ""}" title="Year view">Year</button>
       </div>
       <button id="todayBtn" title="Jump to Today">Today</button>
       <button id="undoBtn" disabled title="Undo (Ctrl+Z)">↩ Undo</button>
@@ -955,6 +936,12 @@ export class GanttPanel {
     });
     document.getElementById('zoomMonth').addEventListener('click', () => {
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'month' });
+    });
+    document.getElementById('zoomQuarter').addEventListener('click', () => {
+      vscode.postMessage({ command: 'setZoom', zoomLevel: 'quarter' });
+    });
+    document.getElementById('zoomYear').addEventListener('click', () => {
+      vscode.postMessage({ command: 'setZoom', zoomLevel: 'year' });
     });
 
     // Right-click on dependency arrow to delete
@@ -1268,6 +1255,7 @@ export class GanttPanel {
 
   /**
    * Generate date markers split into header (fixed) and body (scrollable) parts
+   * Adapts to zoom level for appropriate granularity
    */
   private _generateDateMarkers(
     minDate: Date,
@@ -1284,17 +1272,14 @@ export class GanttPanel {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const totalDays = Math.ceil(
-      (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
     const dayWidth =
       (svgWidth - leftMargin) /
       ((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
 
-    // Adaptive detail level based on zoom and timeline length
-    // Day zoom: show all days; Week zoom: show Mon/Fri; Month zoom: Mon only
-    const showAllDays = zoomLevel === "day" && totalDays < 60;
-    const showMidweek = zoomLevel === "day" || (zoomLevel === "week" && totalDays < 120);
+    // Track last shown markers to avoid duplicates
+    let lastMonth = -1;
+    let lastQuarter = -1;
+    let lastYear = -1;
 
     while (current <= maxDate) {
       const x =
@@ -1304,61 +1289,107 @@ export class GanttPanel {
           (svgWidth - leftMargin);
 
       const dayOfWeek = current.getDay();
+      const dayOfMonth = current.getDate();
+      const month = current.getMonth();
+      const year = current.getFullYear();
+      const quarter = Math.floor(month / 3) + 1;
 
-      // Weekend backgrounds (body - full height)
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
+      // Weekend backgrounds (show for day/week zoom)
+      if ((zoomLevel === "day" || zoomLevel === "week") && (dayOfWeek === 0 || dayOfWeek === 6)) {
         bodyBackgrounds.push(`
           <rect x="${x}" y="0" width="${dayWidth}" height="100%" class="weekend-bg"/>
         `);
       }
 
-      // Week header (top row) - show at start of each week (Monday)
-      if (dayOfWeek === 1) {
-        const weekNum = getWeekNumber(current);
-        const year = current.getFullYear();
-        const weekEnd = new Date(current);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        const startDay = current.getDate();
-        const startMonth = current.toLocaleString("en", { month: "short" });
-        const endDay = weekEnd.getDate();
-        const endMonth = weekEnd.toLocaleString("en", { month: "short" });
-        const dateRange = startMonth === endMonth
-          ? `${startDay} - ${endDay} ${endMonth}`
-          : `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
-        // Header: week text and separator line
+      // Year markers (for quarter/year zoom)
+      if ((zoomLevel === "quarter" || zoomLevel === "year") && month === 0 && dayOfMonth === 1 && lastYear !== year) {
+        lastYear = year;
         headerContent.push(`
           <line x1="${x}" y1="0" x2="${x}" y2="40" class="date-marker"/>
-          <text x="${x + 4}" y="14" fill="var(--vscode-foreground)" font-size="11" font-weight="bold">W${weekNum} (${dateRange}), ${year}</text>
+          <text x="${x + 4}" y="14" fill="var(--vscode-foreground)" font-size="12" font-weight="bold">${year}</text>
         `);
-        // Body: vertical grid line
         bodyGridLines.push(`
           <line x1="${x}" y1="0" x2="${x}" y2="100%" class="day-grid"/>
         `);
       }
 
-      // Day grid line - adaptive (Monday always, others based on timeline length)
-      const showDayDetail = showAllDays || dayOfWeek === 1 || (showMidweek && dayOfWeek === 5);
-      if (showDayDetail) {
-        // Body: vertical grid line (skip if already added for Monday)
-        if (dayOfWeek !== 1) {
+      // Quarter markers (for quarter zoom)
+      if (zoomLevel === "quarter" && dayOfMonth === 1 && (month % 3 === 0) && lastQuarter !== quarter) {
+        lastQuarter = quarter;
+        const quarterLabel = `Q${quarter}`;
+        headerContent.push(`
+          <text x="${x + 4}" y="30" fill="var(--vscode-descriptionForeground)" font-size="10">${quarterLabel}</text>
+        `);
+        if (month !== 0) { // Don't double line on Jan 1
+          bodyGridLines.push(`
+            <line x1="${x}" y1="0" x2="${x}" y2="100%" class="day-grid" style="opacity: 0.2"/>
+          `);
+        }
+      }
+
+      // Month markers (for month/quarter/year zoom)
+      if ((zoomLevel === "month" || zoomLevel === "quarter" || zoomLevel === "year") && dayOfMonth === 1 && lastMonth !== month) {
+        lastMonth = month;
+        const monthLabel = current.toLocaleString("en", { month: "short" });
+        if (zoomLevel === "month") {
+          headerContent.push(`
+            <line x1="${x}" y1="0" x2="${x}" y2="40" class="date-marker"/>
+            <text x="${x + 4}" y="14" fill="var(--vscode-foreground)" font-size="11" font-weight="bold">${monthLabel} ${year}</text>
+          `);
           bodyGridLines.push(`
             <line x1="${x}" y1="0" x2="${x}" y2="100%" class="day-grid"/>
           `);
+        } else if (zoomLevel === "year") {
+          headerContent.push(`
+            <text x="${x + 2}" y="30" fill="var(--vscode-descriptionForeground)" font-size="9">${monthLabel}</text>
+          `);
         }
+      }
 
-        // Header: day label
-        const dayLabel = `${current.getDate()} ${WEEKDAYS_SHORT[dayOfWeek]}`;
-        headerContent.push(`
-          <text x="${x + dayWidth / 2}" y="30" fill="var(--vscode-descriptionForeground)" font-size="10" text-anchor="middle">${dayLabel}</text>
+      // Week markers (for week/month zoom)
+      if ((zoomLevel === "week" || zoomLevel === "month") && dayOfWeek === 1) {
+        const weekNum = getWeekNumber(current);
+        if (zoomLevel === "week") {
+          const weekEnd = new Date(current);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          const startDay = dayOfMonth;
+          const startMonth = current.toLocaleString("en", { month: "short" });
+          const endDay = weekEnd.getDate();
+          const endMonth = weekEnd.toLocaleString("en", { month: "short" });
+          const dateRange = startMonth === endMonth
+            ? `${startDay} - ${endDay} ${endMonth}`
+            : `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
+          headerContent.push(`
+            <line x1="${x}" y1="0" x2="${x}" y2="40" class="date-marker"/>
+            <text x="${x + 4}" y="14" fill="var(--vscode-foreground)" font-size="11" font-weight="bold">W${weekNum} (${dateRange}), ${year}</text>
+          `);
+        } else {
+          // Month zoom - just show week number
+          headerContent.push(`
+            <text x="${x + 2}" y="30" fill="var(--vscode-descriptionForeground)" font-size="9">W${weekNum}</text>
+          `);
+        }
+        bodyGridLines.push(`
+          <line x1="${x}" y1="0" x2="${x}" y2="100%" class="day-grid"/>
         `);
       }
 
-      // Today marker (body - full height)
+      // Day markers (for day zoom - show ALL days)
+      if (zoomLevel === "day") {
+        const dayLabel = `${dayOfMonth} ${WEEKDAYS_SHORT[dayOfWeek]}`;
+        headerContent.push(`
+          <text x="${x + dayWidth / 2}" y="30" fill="var(--vscode-descriptionForeground)" font-size="10" text-anchor="middle">${dayLabel}</text>
+        `);
+        bodyGridLines.push(`
+          <line x1="${x}" y1="0" x2="${x}" y2="100%" class="day-grid"/>
+        `);
+      }
+
+      // Today marker (all zoom levels)
       if (current.toDateString() === today.toDateString()) {
         bodyMarkers.push(`
           <line x1="${x}" y1="0" x2="${x}" y2="100%" class="today-marker"/>
         `);
-        // Also add to header for visual continuity
         headerContent.push(`
           <line x1="${x}" y1="0" x2="${x}" y2="40" class="today-marker"/>
         `);
