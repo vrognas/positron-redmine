@@ -1,163 +1,111 @@
 import * as vscode from "vscode";
 import type { ActionProperties } from "./action-properties";
 import { showStatusBarMessage } from "../utilities/status-bar";
-import { Issue } from "../redmine/models/issue";
 
 interface CreatedIssue {
   id: number;
   subject: string;
 }
 
-/**
- * Validates estimated hours input
- */
-function validateEstimatedHours(value: string): string | null {
-  if (!value) return null; // optional
-  const hours = parseFloat(value);
-  if (isNaN(hours) || hours < 0) {
-    return "Must be a positive number";
-  }
-  return null;
+// Validators
+const validateHours = (v: string): string | null =>
+  !v || (parseFloat(v) >= 0 && !isNaN(parseFloat(v))) ? null : "Must be positive number";
+
+const validateDate = (v: string): string | null => {
+  if (!v) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(new Date(v).getTime())
+    ? null
+    : "Use YYYY-MM-DD format";
+};
+
+// Shared input prompts
+async function promptOptionalFields(prefix: string, step: number) {
+  const description = await vscode.window.showInputBox({
+    title: `${prefix} (${step}/5) - Description`,
+    prompt: "Description (optional, Enter to skip)",
+    placeHolder: "Detailed description...",
+  });
+  if (description === undefined) return undefined;
+
+  const hours = await vscode.window.showInputBox({
+    title: `${prefix} (${step + 1}/5) - Estimated Hours`,
+    prompt: "Estimated hours (optional, Enter to skip)",
+    placeHolder: "e.g., 8",
+    validateInput: validateHours,
+  });
+  if (hours === undefined) return undefined;
+
+  const dueDate = await vscode.window.showInputBox({
+    title: `${prefix} (${step + 2}/5) - Due Date`,
+    prompt: "Due date (optional, Enter to skip)",
+    placeHolder: "YYYY-MM-DD",
+    validateInput: validateDate,
+  });
+  if (dueDate === undefined) return undefined;
+
+  return {
+    description: description || undefined,
+    estimated_hours: hours ? parseFloat(hours) : undefined,
+    due_date: dueDate || undefined,
+  };
 }
 
 /**
- * Validates due date format (YYYY-MM-DD)
- */
-function validateDueDate(value: string): string | null {
-  if (!value) return null; // optional
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(value)) {
-    return "Use YYYY-MM-DD format (e.g., 2025-12-31)";
-  }
-  // Validate it's a real date
-  const date = new Date(value);
-  if (isNaN(date.getTime())) {
-    return "Invalid date";
-  }
-  return null;
-}
-
-/**
- * Quick create issue wizard - full flow
+ * Quick create issue wizard
  */
 export async function quickCreateIssue(
   props: ActionProperties
 ): Promise<CreatedIssue | undefined> {
   try {
-    // 1. Select project
-    const projects = await props.server.getProjects();
+    // Parallel fetch metadata while user sees first picker
+    const [projects, trackers, priorities] = await Promise.all([
+      props.server.getProjects(),
+      props.server.getTrackers(),
+      props.server.getPriorities(),
+    ]);
+
     const projectPick = await vscode.window.showQuickPick(
       projects.map((p) => {
         const item = p.toQuickPickItem();
-        return {
-          label: item.label,
-          description: item.description,
-          id: p.id,
-        };
+        return { label: item.label, description: item.description, id: p.id };
       }),
-      {
-        title: "Create Issue (1/6) - Project",
-        placeHolder: "Select project",
-      }
+      { title: "Create Issue (1/5) - Project", placeHolder: "Select project" }
     );
     if (!projectPick) return undefined;
 
-    // 2. Select tracker
-    const trackers = await props.server.getTrackers();
     const trackerPick = await vscode.window.showQuickPick(
-      trackers.map((t) => ({
-        label: t.name,
-        id: t.id,
-      })),
-      {
-        title: "Create Issue (2/6) - Tracker",
-        placeHolder: "Select tracker type",
-      }
+      trackers.map((t) => ({ label: t.name, id: t.id })),
+      { title: "Create Issue (2/5) - Tracker", placeHolder: "Select tracker" }
     );
     if (!trackerPick) return undefined;
 
-    // 3. Select priority
-    const priorities = await props.server.getPriorities();
     const priorityPick = await vscode.window.showQuickPick(
-      priorities.map((p) => ({
-        label: p.name,
-        id: p.id,
-      })),
-      {
-        title: "Create Issue (3/6) - Priority",
-        placeHolder: "Select priority",
-      }
+      priorities.map((p) => ({ label: p.name, id: p.id })),
+      { title: "Create Issue (3/5) - Priority", placeHolder: "Select priority" }
     );
     if (!priorityPick) return undefined;
 
-    // 4. Enter subject (required)
     const subject = await vscode.window.showInputBox({
-      title: "Create Issue (4/6) - Subject",
+      title: "Create Issue (4/5) - Subject",
       prompt: `Issue subject for ${projectPick.label}`,
       placeHolder: "e.g., Implement login feature",
-      validateInput: (value) => (value ? null : "Subject is required"),
+      validateInput: (v) => (v ? null : "Subject is required"),
     });
-    if (subject === undefined) return undefined;
+    if (!subject) return undefined;
 
-    // 5. Enter description (optional)
-    const description = await vscode.window.showInputBox({
-      title: "Create Issue (5/6) - Description",
-      prompt: "Description (optional, press Enter to skip)",
-      placeHolder: "Detailed description...",
-    });
-    if (description === undefined) return undefined;
+    const optional = await promptOptionalFields("Create Issue", 5);
+    if (!optional) return undefined;
 
-    // 6. Enter estimated hours (optional)
-    const estimatedHoursInput = await vscode.window.showInputBox({
-      title: "Create Issue (6/6) - Estimated Hours",
-      prompt: "Estimated hours (optional, press Enter to skip)",
-      placeHolder: "e.g., 8",
-      validateInput: validateEstimatedHours,
-    });
-    if (estimatedHoursInput === undefined) return undefined;
-
-    // 7. Enter due date (optional)
-    const dueDate = await vscode.window.showInputBox({
-      title: "Create Issue (7/7) - Due Date",
-      prompt: "Due date (optional, press Enter to skip)",
-      placeHolder: "YYYY-MM-DD",
-      validateInput: validateDueDate,
-    });
-    if (dueDate === undefined) return undefined;
-
-    // Build issue payload
-    const issuePayload: {
-      project_id: number;
-      tracker_id: number;
-      subject: string;
-      description?: string;
-      priority_id: number;
-      estimated_hours?: number;
-      due_date?: string;
-    } = {
+    const response = await props.server.createIssue({
       project_id: projectPick.id,
       tracker_id: trackerPick.id,
-      subject,
       priority_id: priorityPick.id,
-    };
+      subject,
+      ...optional,
+    });
 
-    if (description) {
-      issuePayload.description = description;
-    }
-    if (estimatedHoursInput) {
-      issuePayload.estimated_hours = parseFloat(estimatedHoursInput);
-    }
-    if (dueDate) {
-      issuePayload.due_date = dueDate;
-    }
-
-    // Create issue
-    const response = await props.server.createIssue(issuePayload);
-    const created = response.issue;
-
-    showStatusBarMessage(`$(check) Created #${created.id}: ${created.subject}`);
-
-    return { id: created.id, subject: created.subject };
+    showStatusBarMessage(`$(check) Created #${response.issue.id}: ${response.issue.subject}`);
+    return { id: response.issue.id, subject: response.issue.subject };
   } catch (error) {
     vscode.window.showErrorMessage(
       `Failed to create issue: ${error instanceof Error ? error.message : String(error)}`
@@ -174,96 +122,40 @@ export async function quickCreateSubIssue(
   parentIssueId: number
 ): Promise<CreatedIssue | undefined> {
   try {
-    // Fetch parent issue to get project and tracker
-    const parentResponse = await props.server.getIssueById(parentIssueId);
-    const parent: Issue = parentResponse.issue;
+    const [parentResponse, priorities] = await Promise.all([
+      props.server.getIssueById(parentIssueId),
+      props.server.getPriorities(),
+    ]);
+    const parent = parentResponse.issue;
 
-    // 1. Select priority
-    const priorities = await props.server.getPriorities();
     const priorityPick = await vscode.window.showQuickPick(
-      priorities.map((p) => ({
-        label: p.name,
-        id: p.id,
-      })),
-      {
-        title: `Sub-Issue of #${parent.id} (1/4) - Priority`,
-        placeHolder: "Select priority",
-      }
+      priorities.map((p) => ({ label: p.name, id: p.id })),
+      { title: `Sub-Issue of #${parent.id} (1/5) - Priority`, placeHolder: "Select priority" }
     );
     if (!priorityPick) return undefined;
 
-    // 2. Enter subject (required)
     const subject = await vscode.window.showInputBox({
-      title: `Sub-Issue of #${parent.id} (2/4) - Subject`,
+      title: `Sub-Issue of #${parent.id} (2/5) - Subject`,
       prompt: `Sub-issue of #${parent.id}: ${parent.subject}`,
       placeHolder: "e.g., Subtask description",
-      validateInput: (value) => (value ? null : "Subject is required"),
+      validateInput: (v) => (v ? null : "Subject is required"),
     });
-    if (subject === undefined) return undefined;
+    if (!subject) return undefined;
 
-    // 3. Enter description (optional)
-    const description = await vscode.window.showInputBox({
-      title: `Sub-Issue of #${parent.id} (3/4) - Description`,
-      prompt: "Description (optional, press Enter to skip)",
-      placeHolder: "Detailed description...",
-    });
-    if (description === undefined) return undefined;
+    const optional = await promptOptionalFields(`Sub-Issue of #${parent.id}`, 3);
+    if (!optional) return undefined;
 
-    // 4. Enter estimated hours (optional)
-    const estimatedHoursInput = await vscode.window.showInputBox({
-      title: `Sub-Issue of #${parent.id} (4/4) - Estimated Hours`,
-      prompt: "Estimated hours (optional, press Enter to skip)",
-      placeHolder: "e.g., 4",
-      validateInput: validateEstimatedHours,
-    });
-    if (estimatedHoursInput === undefined) return undefined;
-
-    // 5. Enter due date (optional)
-    const dueDate = await vscode.window.showInputBox({
-      title: `Sub-Issue of #${parent.id} (5/5) - Due Date`,
-      prompt: "Due date (optional, press Enter to skip)",
-      placeHolder: "YYYY-MM-DD",
-      validateInput: validateDueDate,
-    });
-    if (dueDate === undefined) return undefined;
-
-    // Build issue payload - inherit project and tracker from parent
-    const issuePayload: {
-      project_id: number;
-      tracker_id: number;
-      subject: string;
-      description?: string;
-      priority_id: number;
-      estimated_hours?: number;
-      due_date?: string;
-      parent_issue_id: number;
-    } = {
+    const response = await props.server.createIssue({
       project_id: parent.project.id,
       tracker_id: parent.tracker.id,
-      subject,
       priority_id: priorityPick.id,
+      subject,
       parent_issue_id: parentIssueId,
-    };
+      ...optional,
+    });
 
-    if (description) {
-      issuePayload.description = description;
-    }
-    if (estimatedHoursInput) {
-      issuePayload.estimated_hours = parseFloat(estimatedHoursInput);
-    }
-    if (dueDate) {
-      issuePayload.due_date = dueDate;
-    }
-
-    // Create sub-issue
-    const response = await props.server.createIssue(issuePayload);
-    const created = response.issue;
-
-    showStatusBarMessage(
-      `$(check) Created #${created.id} under #${parentIssueId}`
-    );
-
-    return { id: created.id, subject: created.subject };
+    showStatusBarMessage(`$(check) Created #${response.issue.id} under #${parentIssueId}`);
+    return { id: response.issue.id, subject: response.issue.subject };
   } catch (error) {
     vscode.window.showErrorMessage(
       `Failed to create sub-issue: ${error instanceof Error ? error.message : String(error)}`
