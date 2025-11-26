@@ -9,7 +9,9 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 - **Drag-to-link relations** in Gantt chart - drag from link handle on bar to another bar
   - Visual feedback: arrow with arrowhead follows cursor, target highlights
   - Inline picker for relation type (Blocks/Precedes/Follows)
+- **Past-portion texture** - Redmine-style diagonal red stripes show elapsed time on bars
 - **Past bars dimmed** - issues with due date before today are desaturated
+- **Relation removal** - right-click dependency arrows to delete, with hover effect
 - **Gantt accessibility** - keyboard navigation (Arrow Up/Down, Enter), focus indicators, ARIA labels
 - **Interactive walkthrough** - 4-step onboarding guide (configure, view issues, log time, timeline)
 
@@ -22,6 +24,8 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 ### Changed
 
 - **View renamed**: "Projects" → "My Issues" (better describes content)
+- **Default view style**: Tree view (was list) - groups issues by project hierarchy
+- **Parent project highlighting**: Projects with subproject issues are now highlighted
 - **Category**: "Other" → "Project Management" for marketplace
 - **Command prefixes**: Toggle commands now use "Redmine:" prefix
 - **Status bar**: Workload now on left side (workspace status)
