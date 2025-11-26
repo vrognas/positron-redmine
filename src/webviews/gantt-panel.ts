@@ -449,6 +449,13 @@ export class GanttPanel {
         spent_hours: i.spent_hours ?? null,
         done_ratio: i.done_ratio ?? 0,
         relations: (i.relations || [])
+          // Filter out reverse relation types (Redmine returns both directions)
+          // Keep only "forward" types to avoid duplicate arrows
+          // Skip: blocked (reverse of blocks), duplicated (reverse of duplicates),
+          //       copied_from (reverse of copied_to), follows (reverse of precedes)
+          .filter((r) => !["blocked", "duplicated", "copied_from", "follows"].includes(r.relation_type))
+          // Skip self-referencing relations (bug protection)
+          .filter((r) => r.issue_to_id !== i.id && r.issue_id !== r.issue_to_id)
           .map((r) => ({
             id: r.id,
             targetId: r.issue_to_id,
@@ -516,6 +523,10 @@ export class GanttPanel {
           command: "setHeatmapState",
           enabled: this._showWorkloadHeatmap,
         });
+        break;
+      case "refresh":
+        // Trigger a full refresh via the VS Code command
+        vscode.commands.executeCommand("redmine.refreshIssues");
         break;
     }
   }
@@ -923,14 +934,14 @@ export class GanttPanel {
       }
     });
 
-    // Relation type styling (GitLens-inspired with distinct colors and styles)
-    const relationStyles: Record<RelationType, { color: string; dash: string; label: string; tip: string }> = {
+    // Relation type styling - only forward types (reverse types are filtered out)
+    // blocks/precedes/relates/duplicates/copied_to are shown
+    // blocked/follows/duplicated/copied_from are auto-generated reverses, filtered
+    const relationStyles: Record<string, { color: string; dash: string; label: string; tip: string }> = {
       blocks: { color: "#e74c3c", dash: "", label: "blocks",
         tip: "Target cannot be closed until source is closed" },
       precedes: { color: "#9b59b6", dash: "", label: "precedes",
         tip: "Source must complete before target can start" },
-      follows: { color: "#3498db", dash: "", label: "follows",
-        tip: "Source starts after target ends" },
       relates: { color: "#7f8c8d", dash: "4,3", label: "relates to",
         tip: "Simple link (no constraints)" },
       duplicates: { color: "#e67e22", dash: "2,2", label: "duplicates",
@@ -946,54 +957,52 @@ export class GanttPanel {
           const target = issuePositions.get(rel.targetId);
           if (!source || !target) return "";
 
-          const x1 = source.endX;
+          // Arrow from end of source bar to start of target bar
+          const x1 = source.endX + 2; // Small gap from bar
           const y1 = source.y;
-          const x2 = target.startX;
+          const x2 = target.startX - 2; // Small gap to bar
           const y2 = target.y;
 
           const style = relationStyles[rel.type] || relationStyles.relates;
-          const arrowSize = 7;
+          const arrowSize = 6;
 
-          // Route arrows to avoid overlapping with bars
-          // If target is to the left or same position, route above/below
-          const yDiff = y2 - y1;
-          const xDiff = x2 - x1;
+          // Simple elbow path: horizontal out, vertical to target row, horizontal to target
+          // Much cleaner and easier to follow than bezier curves
+          const gap = 12; // Horizontal gap before turning
+          const goingRight = x2 > x1;
+          const midX = goingRight ? x1 + gap : x1 + gap; // Always go right first, then adjust
 
           let path: string;
+          let arrowHeadX: number;
 
-          // Calculate offset to route around bars (above or below based on direction)
-          const routeOffset = barHeight * 0.8;
-          const goingDown = yDiff > 0;
-          const goingRight = xDiff > 0;
-
-          if (Math.abs(yDiff) < barHeight && Math.abs(xDiff) < 50) {
-            // Same row or very close - simple bezier
-            const cpOffset = Math.max(30, Math.abs(xDiff) * 0.3);
-            path = `M ${x1} ${y1} C ${x1 + cpOffset} ${y1}, ${x2 - cpOffset} ${y2}, ${x2 - arrowSize} ${y2}`;
+          if (goingRight && Math.abs(y2 - y1) < 5) {
+            // Same row, target to right - straight line
+            path = `M ${x1} ${y1} L ${x2 - arrowSize} ${y2}`;
+            arrowHeadX = x2;
           } else if (goingRight) {
-            // Target is to the right - smooth S-curve bezier
-            const midX = x1 + (x2 - x1) * 0.5;
-            path = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2 - arrowSize} ${y2}`;
+            // Target to the right, different row - simple elbow
+            path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`;
+            arrowHeadX = x2;
           } else {
-            // Target is to the left - route around via top or bottom
-            const routeY = goingDown ? Math.max(y1, y2) + routeOffset : Math.min(y1, y2) - routeOffset;
-            const cp1x = x1 + 20;
-            const cp2x = x2 - 20;
-            path = `M ${x1} ${y1} C ${cp1x} ${y1}, ${cp1x} ${routeY}, ${(x1 + x2) / 2} ${routeY} S ${cp2x} ${y2}, ${x2 + arrowSize} ${y2}`;
+            // Target to the left - need to route around
+            // Go right first, then down/up, then left
+            const routeY = y2 > y1 ? Math.max(y1, y2) + barHeight : Math.min(y1, y2) - barHeight;
+            path = `M ${x1} ${y1} H ${midX} V ${routeY} H ${x2 - gap} V ${y2} H ${x2 + arrowSize}`;
+            arrowHeadX = x2;
           }
 
-          // Arrow head always points toward target
-          const pointsRight = goingRight || (!goingRight && Math.abs(xDiff) < 50);
+          // Arrow head pointing in the right direction
+          const pointsRight = goingRight;
           const arrowHead = pointsRight
-            ? `M ${x2} ${y2} l -${arrowSize} -${arrowSize * 0.5} l 0 ${arrowSize} Z`
-            : `M ${x2} ${y2} l ${arrowSize} -${arrowSize * 0.5} l 0 ${arrowSize} Z`;
+            ? `M ${arrowHeadX} ${y2} l -${arrowSize} -${arrowSize * 0.6} l 0 ${arrowSize * 1.2} Z`
+            : `M ${arrowHeadX} ${y2} l ${arrowSize} -${arrowSize * 0.6} l 0 ${arrowSize * 1.2} Z`;
 
           const dashAttr = style.dash ? `stroke-dasharray="${style.dash}"` : "";
 
           return `
             <g class="dependency-arrow rel-${rel.type}" data-relation-id="${rel.id}" data-from="${issue.id}" data-to="${rel.targetId}" style="cursor: pointer;">
               <!-- Wide invisible hit area for easier clicking -->
-              <path class="arrow-hit-area" d="${path}" stroke="transparent" stroke-width="18" fill="none"/>
+              <path class="arrow-hit-area" d="${path}" stroke="transparent" stroke-width="16" fill="none"/>
               <path class="arrow-line" d="${path}" stroke="${style.color}" stroke-width="2" fill="none" ${dashAttr}/>
               <path class="arrow-head" d="${arrowHead}" fill="${style.color}"/>
               <title>#${issue.id} ${style.label} #${rel.targetId}
@@ -1257,11 +1266,11 @@ ${style.tip}
       <div class="relation-legend" title="Relation types (drag from link handle to create)">
         <span class="relation-legend-item"><span class="relation-legend-line" style="background: #e74c3c;"></span>blocks</span>
         <span class="relation-legend-item"><span class="relation-legend-line" style="background: #9b59b6;"></span>precedes</span>
-        <span class="relation-legend-item"><span class="relation-legend-line" style="background: #3498db;"></span>follows</span>
         <span class="relation-legend-item"><span class="relation-legend-line" style="background: #7f8c8d; border-style: dashed;"></span>relates</span>
         <span class="relation-legend-item"><span class="relation-legend-line" style="background: #e67e22; border-style: dotted;"></span>duplicates</span>
         <span class="relation-legend-item"><span class="relation-legend-line" style="background: #1abc9c; border-style: dashed;"></span>copied</span>
       </div>
+      <button id="refreshBtn" title="Refresh issues">↻ Refresh</button>
       <button id="todayBtn" title="Jump to Today">Today</button>
       <button id="undoBtn" disabled title="Undo (Ctrl+Z)">↩ Undo</button>
       <button id="redoBtn" disabled title="Redo (Ctrl+Shift+Z)">↪ Redo</button>
@@ -1453,6 +1462,11 @@ ${style.tip}
       vscode.postMessage({ command: 'toggleWorkloadHeatmap' });
     });
 
+    // Refresh button handler
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      vscode.postMessage({ command: 'refresh' });
+    });
+
     // Show delete confirmation picker
     function showDeletePicker(x, y, relationId, fromId, toId) {
       document.querySelector('.relation-picker')?.remove();
@@ -1579,9 +1593,7 @@ ${style.tip}
         { value: 'blocks', label: '🚫 Blocks', color: '#e74c3c',
           tooltip: 'Target cannot be closed until this issue is closed' },
         { value: 'precedes', label: '➡️ Precedes', color: '#9b59b6',
-          tooltip: 'This issue must complete before target can start. Date changes propagate.' },
-        { value: 'follows', label: '⬅️ Follows', color: '#3498db',
-          tooltip: 'This issue starts after target ends. Date changes propagate.' },
+          tooltip: 'This issue must complete before target can start' },
         { value: 'relates', label: '🔗 Relates to', color: '#7f8c8d',
           tooltip: 'Simple link between issues (no constraints)' },
         { value: 'duplicates', label: '📋 Duplicates', color: '#e67e22',
