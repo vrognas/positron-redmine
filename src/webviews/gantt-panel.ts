@@ -779,6 +779,7 @@ export class GanttPanel {
     .issue-bar:hover .bar-main, .issue-label:hover { opacity: 0.8; }
     .issue-bar .drag-handle:hover { fill: var(--vscode-list-hoverBackground); }
     .issue-bar.dragging .bar-main { opacity: 0.5; }
+    .issue-bar.linking-source .bar-main { stroke: var(--vscode-focusBorder); stroke-width: 3; }
     .weekend-bg { fill: var(--vscode-editor-inactiveSelectionBackground); opacity: 0.3; }
     .day-grid { stroke: var(--vscode-editorRuler-foreground); stroke-width: 0.5; opacity: 0.3; }
     .date-marker { stroke: var(--vscode-editorRuler-foreground); stroke-dasharray: 2,2; }
@@ -943,6 +944,50 @@ export class GanttPanel {
         const issueId = parseInt(bar.closest('.issue-bar').dataset.issueId);
         vscode.postMessage({ command: 'openIssue', issueId });
       });
+    });
+
+    // Linking mode state
+    let linkingState = null;
+
+    // Alt+click on bar to start linking mode
+    document.querySelectorAll('.issue-bar .bar-main').forEach(bar => {
+      bar.addEventListener('click', (e) => {
+        if (!e.altKey) return;
+        e.stopPropagation();
+        const issueBar = bar.closest('.issue-bar');
+        const issueId = parseInt(issueBar.dataset.issueId);
+
+        if (!linkingState) {
+          // Start linking mode
+          linkingState = { fromId: issueId, fromBar: issueBar };
+          issueBar.classList.add('linking-source');
+          document.body.style.cursor = 'crosshair';
+        } else if (linkingState.fromId !== issueId) {
+          // Complete link to different issue
+          const relationType = prompt('Relation type: (b)locks or (p)recedes?', 'b');
+          if (relationType) {
+            const type = relationType.toLowerCase().startsWith('p') ? 'precedes' : 'blocks';
+            vscode.postMessage({
+              command: 'createRelation',
+              issueId: linkingState.fromId,
+              targetIssueId: issueId,
+              relationType: type
+            });
+          }
+          linkingState.fromBar.classList.remove('linking-source');
+          linkingState = null;
+          document.body.style.cursor = '';
+        }
+      });
+    });
+
+    // Escape to cancel linking mode
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && linkingState) {
+        linkingState.fromBar.classList.remove('linking-source');
+        linkingState = null;
+        document.body.style.cursor = '';
+      }
     });
 
     // Labels click
