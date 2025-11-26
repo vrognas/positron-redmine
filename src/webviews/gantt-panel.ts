@@ -1116,11 +1116,28 @@ export class GanttPanel {
     const redoBtn = document.getElementById('redoBtn');
 
     // Restore state from previous session
-    const previousState = vscode.getState() || { undoStack: [], redoStack: [], labelWidth: ${labelWidth}, scrollLeft: null, scrollTop: null };
+    const previousState = vscode.getState() || { undoStack: [], redoStack: [], labelWidth: ${labelWidth}, scrollLeft: null, scrollTop: null, centerDateMs: null };
     const undoStack = previousState.undoStack || [];
     const redoStack = previousState.redoStack || [];
     let savedScrollLeft = previousState.scrollLeft;
     let savedScrollTop = previousState.scrollTop;
+    let savedCenterDateMs = previousState.centerDateMs;
+
+    // Convert scroll position to center date (milliseconds)
+    function getCenterDateMs() {
+      if (!timelineColumn) return null;
+      const centerX = timelineColumn.scrollLeft + timelineColumn.clientWidth / 2;
+      const ratio = centerX / timelineWidth;
+      return minDateMs + ratio * (maxDateMs - minDateMs);
+    }
+
+    // Scroll to center a specific date
+    function scrollToCenterDate(dateMs) {
+      if (!timelineColumn) return;
+      const ratio = (dateMs - minDateMs) / (maxDateMs - minDateMs);
+      const centerX = ratio * timelineWidth;
+      timelineColumn.scrollLeft = Math.max(0, centerX - timelineColumn.clientWidth / 2);
+    }
 
     function saveState() {
       vscode.setState({
@@ -1128,7 +1145,20 @@ export class GanttPanel {
         redoStack,
         labelWidth: ganttLeft?.offsetWidth || ${labelWidth},
         scrollLeft: timelineColumn?.scrollLeft ?? null,
-        scrollTop: timelineColumn?.scrollTop ?? null
+        scrollTop: timelineColumn?.scrollTop ?? null,
+        centerDateMs: null
+      });
+    }
+
+    // Save state with center date for zoom changes (preserves view center across zoom levels)
+    function saveStateForZoom() {
+      vscode.setState({
+        undoStack,
+        redoStack,
+        labelWidth: ganttLeft?.offsetWidth || ${labelWidth},
+        scrollLeft: null,
+        scrollTop: timelineColumn?.scrollTop ?? null,
+        centerDateMs: getCenterDateMs()
       });
     }
 
@@ -1168,25 +1198,25 @@ export class GanttPanel {
     // Initial button state
     updateUndoRedoButtons();
 
-    // Zoom toggle handlers
+    // Zoom toggle handlers - use saveStateForZoom to preserve center date
     document.getElementById('zoomDay').addEventListener('click', () => {
-      saveState();
+      saveStateForZoom();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'day' });
     });
     document.getElementById('zoomWeek').addEventListener('click', () => {
-      saveState();
+      saveStateForZoom();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'week' });
     });
     document.getElementById('zoomMonth').addEventListener('click', () => {
-      saveState();
+      saveStateForZoom();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'month' });
     });
     document.getElementById('zoomQuarter').addEventListener('click', () => {
-      saveState();
+      saveStateForZoom();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'quarter' });
     });
     document.getElementById('zoomYear').addEventListener('click', () => {
-      saveState();
+      saveStateForZoom();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'year' });
     });
 
@@ -1433,13 +1463,22 @@ export class GanttPanel {
     }
 
     // Restore scroll position or scroll to today on initial load
-    if (savedScrollLeft !== null && timelineColumn) {
+    if (savedCenterDateMs !== null && timelineColumn) {
+      // Zoom change: restore by centering on saved date
+      scrollToCenterDate(savedCenterDateMs);
+      if (savedScrollTop !== null) {
+        timelineColumn.scrollTop = savedScrollTop;
+        labelsColumn.scrollTop = savedScrollTop;
+      }
+      savedCenterDateMs = null;
+      savedScrollTop = null;
+    } else if (savedScrollLeft !== null && timelineColumn) {
+      // Other operations: restore pixel position
       timelineColumn.scrollLeft = savedScrollLeft;
       if (savedScrollTop !== null) {
         timelineColumn.scrollTop = savedScrollTop;
         labelsColumn.scrollTop = savedScrollTop;
       }
-      // Clear saved scroll so next fresh load goes to today
       savedScrollLeft = null;
       savedScrollTop = null;
     } else {
