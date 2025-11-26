@@ -2181,7 +2181,7 @@ ${style.tip}
       scrollToCenterDate(savedCenterDateMs);
       if (savedScrollTop !== null) {
         timelineColumn.scrollTop = savedScrollTop;
-        labelsColumn.scrollTop = savedScrollTop;
+        if (labelsColumn) labelsColumn.scrollTop = savedScrollTop;
       }
       savedCenterDateMs = null;
       savedScrollTop = null;
@@ -2190,7 +2190,7 @@ ${style.tip}
       timelineColumn.scrollLeft = savedScrollLeft;
       if (savedScrollTop !== null) {
         timelineColumn.scrollTop = savedScrollTop;
-        labelsColumn.scrollTop = savedScrollTop;
+        if (labelsColumn) labelsColumn.scrollTop = savedScrollTop;
       }
       savedScrollLeft = null;
       savedScrollTop = null;
