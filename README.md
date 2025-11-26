@@ -1,8 +1,31 @@
 # Redmine for Positron
 
-Redmine project management integration for Positron IDE and VS Code.
+**Personal workload management for developers using Redmine.**
 
 > **Attribution**: This is a Positron-focused fork of [vscode-redmine](https://github.com/rozpuszczalny/vscode-redmine) by Tomasz Domański, originally licensed under MIT.
+
+## Why This Extension?
+
+Redmine's web UI asks: *"How is the PROJECT doing?"* — release status, team activity, where time is being spent. It's built for project managers and stakeholders.
+
+**This extension asks a different question: *"How is MY WORKLOAD doing?"***
+
+- What's assigned to me?
+- Am I overbooked this week?
+- What should I work on next?
+- How much time did I log today?
+
+If you're a **developer** using Redmine, you don't need another project dashboard — you need **personal productivity tools** integrated into your IDE where you already work.
+
+### Why not just use Redmine's web UI?
+
+The web UI is great for project-level oversight, but switching contexts between your IDE and browser breaks flow. This extension keeps your task list, time logging, and timeline **right next to your code**.
+
+### Why not RedmineX or other clients?
+
+Desktop clients like RedmineX replicate Redmine's full project management interface. They're powerful, but they're still project-focused tools. This extension is intentionally focused on **your personal workflow** — minimal UI, fast actions, IDE integration.
+
+**Think of it as:** Redmine for *you*, not Redmine for your *project*.
 
 ## Features
 
