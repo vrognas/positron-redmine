@@ -530,6 +530,13 @@ export class GanttPanel {
     const timelineWidth = ${timelineWidth};
     const minDateMs = ${minDate.getTime()};
     const maxDateMs = ${maxDate.getTime()};
+    const totalDays = ${totalDays};
+    const dayWidth = timelineWidth / totalDays;
+
+    // Snap x position to nearest day boundary
+    function snapToDay(x) {
+      return Math.round(x / dayWidth) * dayWidth;
+    }
 
     // Restore state from previous session
     const previousState = vscode.getState() || { undoStack: [], redoStack: [], labelWidth: ${labelWidth} };
@@ -624,9 +631,11 @@ export class GanttPanel {
       let newEndX = dragState.endX;
 
       if (dragState.isLeft) {
-        newStartX = Math.max(0, Math.min(dragState.startX + delta, dragState.endX - 20));
+        // Snap to day boundary, ensure minimum bar width of 1 day
+        newStartX = snapToDay(Math.max(0, Math.min(dragState.startX + delta, dragState.endX - dayWidth)));
       } else {
-        newEndX = Math.max(dragState.startX + 20, Math.min(dragState.endX + delta, timelineWidth));
+        // Snap to day boundary, ensure minimum bar width of 1 day
+        newEndX = snapToDay(Math.max(dragState.startX + dayWidth, Math.min(dragState.endX + delta, timelineWidth)));
       }
 
       // Update visual
