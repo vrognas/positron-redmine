@@ -221,6 +221,77 @@ function calculateDailyIntensity(
 }
 
 /**
+ * Calculate aggregate daily workload across all issues
+ * Returns map of date string (YYYY-MM-DD) to total intensity (hours used / hours available)
+ */
+function calculateAggregateWorkload(
+  issues: GanttIssue[],
+  schedule: WeeklySchedule,
+  minDate: Date,
+  maxDate: Date
+): Map<string, number> {
+  const workloadMap = new Map<string, number>();
+
+  // Initialize all days with 0
+  const current = new Date(minDate);
+  while (current <= maxDate) {
+    workloadMap.set(current.toISOString().slice(0, 10), 0);
+    current.setDate(current.getDate() + 1);
+  }
+
+  // For each issue, distribute its estimated hours across its date range
+  for (const issue of issues) {
+    if (!issue.start_date || !issue.due_date || !issue.estimated_hours) {
+      continue;
+    }
+
+    const start = new Date(issue.start_date);
+    const end = new Date(issue.due_date);
+    const estimatedHours = issue.estimated_hours;
+
+    // Calculate total available hours in the issue's range
+    let totalAvailable = 0;
+    const temp = new Date(start);
+    while (temp <= end) {
+      totalAvailable += schedule[getDayKey(temp)];
+      temp.setDate(temp.getDate() + 1);
+    }
+
+    if (totalAvailable === 0) continue;
+
+    // Distribute hours proportionally across each day
+    temp.setTime(start.getTime());
+    while (temp <= end) {
+      const dateKey = temp.toISOString().slice(0, 10);
+      const dayHours = schedule[getDayKey(temp)];
+      if (dayHours > 0) {
+        // Intensity = (allocated hours) / (available hours)
+        // Allocated = estimatedHours * (dayHours / totalAvailable)
+        const allocated = estimatedHours * (dayHours / totalAvailable);
+        const intensity = allocated / dayHours;
+        const current = workloadMap.get(dateKey) ?? 0;
+        workloadMap.set(dateKey, current + intensity);
+      }
+      temp.setDate(temp.getDate() + 1);
+    }
+  }
+
+  return workloadMap;
+}
+
+/**
+ * Get heatmap color based on utilization level
+ * Green < 80%, Yellow 80-100%, Orange 100-120%, Red > 120%
+ */
+function getHeatmapColor(utilization: number): string {
+  if (utilization <= 0) return "transparent";
+  if (utilization <= 0.8) return "var(--vscode-charts-green)";
+  if (utilization <= 1.0) return "var(--vscode-charts-yellow)";
+  if (utilization <= 1.2) return "var(--vscode-charts-orange)";
+  return "var(--vscode-charts-red)";
+}
+
+/**
  * Gantt timeline webview panel
  * Shows issues as horizontal bars on a timeline
  */
@@ -233,6 +304,7 @@ export class GanttPanel {
   private _server: RedmineServer | undefined;
   private _zoomLevel: ZoomLevel = "day";
   private _schedule: WeeklySchedule = DEFAULT_SCHEDULE;
+  private _showWorkloadHeatmap: boolean = false;
 
   private constructor(panel: vscode.WebviewPanel, server?: RedmineServer) {
     this._panel = panel;
@@ -427,6 +499,10 @@ export class GanttPanel {
         if (message.issueId && message.targetIssueId && message.relationType && this._server) {
           this._createRelation(message.issueId, message.targetIssueId, message.relationType);
         }
+        break;
+      case "toggleWorkloadHeatmap":
+        this._showWorkloadHeatmap = !this._showWorkloadHeatmap;
+        this._updateContent();
         break;
     }
   }
@@ -774,13 +850,19 @@ export class GanttPanel {
       )
       .join("");
 
+    // Calculate aggregate workload for heatmap (if enabled)
+    const workloadMap = this._showWorkloadHeatmap
+      ? calculateAggregateWorkload(this._issues, this._schedule, minDate, maxDate)
+      : undefined;
+
     // Date markers split into fixed header and scrollable body
     const dateMarkers = this._generateDateMarkers(
       minDate,
       maxDate,
       timelineWidth,
       0,
-      this._zoomLevel
+      this._zoomLevel,
+      workloadMap
     );
 
     // Calculate today's position for auto-scroll
@@ -837,6 +919,10 @@ export class GanttPanel {
     .gantt-actions button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+    .gantt-actions button.active {
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
     }
     .zoom-toggle {
       display: flex;
@@ -960,6 +1046,7 @@ export class GanttPanel {
         <button id="zoomQuarter" class="${this._zoomLevel === "quarter" ? "active" : ""}" title="Quarter view">Quarter</button>
         <button id="zoomYear" class="${this._zoomLevel === "year" ? "active" : ""}" title="Year view">Year</button>
       </div>
+      <button id="heatmapBtn" class="${this._showWorkloadHeatmap ? "active" : ""}" title="Toggle workload heatmap">Heatmap</button>
       <button id="todayBtn" title="Jump to Today">Today</button>
       <button id="undoBtn" disabled title="Undo (Ctrl+Z)">↩ Undo</button>
       <button id="redoBtn" disabled title="Redo (Ctrl+Shift+Z)">↪ Redo</button>
@@ -1084,6 +1171,12 @@ export class GanttPanel {
     document.getElementById('zoomYear').addEventListener('click', () => {
       saveState();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'year' });
+    });
+
+    // Heatmap toggle handler
+    document.getElementById('heatmapBtn').addEventListener('click', () => {
+      saveState();
+      vscode.postMessage({ command: 'toggleWorkloadHeatmap' });
     });
 
     // Right-click on dependency arrow to delete
@@ -1424,7 +1517,8 @@ export class GanttPanel {
     maxDate: Date,
     svgWidth: number,
     leftMargin: number,
-    zoomLevel: ZoomLevel = "day"
+    zoomLevel: ZoomLevel = "day",
+    workloadMap?: Map<string, number>
   ): { header: string; body: string } {
     const headerContent: string[] = [];
     const bodyBackgrounds: string[] = [];
@@ -1456,8 +1550,20 @@ export class GanttPanel {
       const year = current.getFullYear();
       const quarter = Math.floor(month / 3) + 1;
 
-      // Weekend backgrounds (show for day/week zoom)
-      if ((zoomLevel === "day" || zoomLevel === "week") && (dayOfWeek === 0 || dayOfWeek === 6)) {
+      // Workload heatmap backgrounds (when enabled)
+      if (workloadMap) {
+        const dateKey = current.toISOString().slice(0, 10);
+        const utilization = workloadMap.get(dateKey) ?? 0;
+        const color = getHeatmapColor(utilization);
+        if (color !== "transparent") {
+          bodyBackgrounds.push(`
+            <rect x="${x}" y="0" width="${dayWidth}" height="100%" fill="${color}" opacity="0.15"/>
+          `);
+        }
+      }
+
+      // Weekend backgrounds (show for day/week zoom when heatmap not active)
+      if (!workloadMap && (zoomLevel === "day" || zoomLevel === "week") && (dayOfWeek === 0 || dayOfWeek === 6)) {
         bodyBackgrounds.push(`
           <rect x="${x}" y="0" width="${dayWidth}" height="100%" class="weekend-bg"/>
         `);
