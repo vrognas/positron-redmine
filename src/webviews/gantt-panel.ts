@@ -682,12 +682,16 @@ export class GanttPanel {
           ? new Date(issue.due_date)
           : new Date(issue.start_date!);
 
+        // Add 1 day to end to get END of due_date (not start/midnight)
+        const endPlusOne = new Date(end);
+        endPlusOne.setDate(endPlusOne.getDate() + 1);
+
         const startX =
           ((start.getTime() - minDate.getTime()) /
             (maxDate.getTime() - minDate.getTime())) *
           timelineWidth;
         const endX =
-          ((end.getTime() - minDate.getTime()) /
+          ((endPlusOne.getTime() - minDate.getTime()) /
             (maxDate.getTime() - minDate.getTime())) *
           timelineWidth;
 
@@ -799,12 +803,15 @@ export class GanttPanel {
         const end = issue.due_date
           ? new Date(issue.due_date)
           : new Date(issue.start_date!);
+        // Add 1 day to end to match bar width calculation
+        const endPlusOne = new Date(end);
+        endPlusOne.setDate(endPlusOne.getDate() + 1);
         const startX =
           ((start.getTime() - minDate.getTime()) /
             (maxDate.getTime() - minDate.getTime())) *
           timelineWidth;
         const endX =
-          ((end.getTime() - minDate.getTime()) /
+          ((endPlusOne.getTime() - minDate.getTime()) /
             (maxDate.getTime() - minDate.getTime())) *
           timelineWidth;
         const y = index * (barHeight + barGap) + barHeight / 2; // Y starts at 0 in body SVG
