@@ -1,6 +1,29 @@
 import { NamedEntity } from "./named-entity";
 
 /**
+ * Single field change in a journal entry
+ */
+export interface JournalDetail {
+  property: "attr" | "cf" | "attachment" | "relation";
+  name: string;
+  old_value?: string;
+  new_value?: string;
+}
+
+/**
+ * Journal entry = a single update/comment on an issue
+ * Captures who changed what, when, and optional notes
+ */
+export interface Journal {
+  id: number;
+  user: NamedEntity;
+  notes: string;
+  created_on: string;
+  private_notes: boolean;
+  details: JournalDetail[];
+}
+
+/**
  * Redmine issue relation (from include=relations)
  * Relations are DIRECTIONAL - blocked != blocks
  */
@@ -60,4 +83,6 @@ export interface Issue {
   children?: ChildIssue[];
   /** Issue relations (from include=relations) */
   relations?: IssueRelation[];
+  /** Journal entries (from include=journals) - updates/comments history */
+  journals?: Journal[];
 }

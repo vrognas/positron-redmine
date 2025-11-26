@@ -399,6 +399,13 @@ export class RedmineServer {
   }
 
   /**
+   * Fetch issue with full journal history (updates/comments)
+   */
+  getIssueWithJournals(issueId: number): Promise<{ issue: Issue }> {
+    return this.doRequest(`/issues/${issueId}.json?include=journals`, "GET");
+  }
+
+  /**
    * Returns promise, that resolves, when issue status is set
    */
   setIssueStatus(issue: Issue, statusId: number): Promise<unknown> {

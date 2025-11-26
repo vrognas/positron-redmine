@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { QuickUpdate, Membership, IssueStatus } from "./domain";
 import { RedmineServer } from "../redmine/redmine-server";
-import { Issue } from "../redmine/models/issue";
+import { Issue, Journal } from "../redmine/models/issue";
 import { IssueStatus as RedmineIssueStatus } from "../redmine/models/issue-status";
 import { TimeEntryActivity } from "../redmine/models/time-entry-activity";
 import { errorToString } from "../utilities/error-to-string";
@@ -250,6 +250,12 @@ export class IssueController {
             description: "View issue in Redmine",
             detail: issueDetails,
           },
+          {
+            action: "viewHistory",
+            label: "$(git-commit) View history",
+            description: "See updates and comments",
+            detail: issueDetails,
+          },
         ],
         {
           title: `#${this.issue.id}: ${this.issue.subject}`,
@@ -268,6 +274,87 @@ export class IssueController {
       }
       if (option.action === "quickUpdate") {
         this.quickUpdate();
+      }
+      if (option.action === "viewHistory") {
+        this.viewHistory();
+      }
+    } catch (error) {
+      vscode.window.showErrorMessage(errorToString(error));
+    }
+  }
+
+  /**
+   * Show issue history (journal entries)
+   */
+  private async viewHistory() {
+    try {
+      const result = await this.redmine.getIssueWithJournals(this.issue.id);
+      const journals = result.issue.journals || [];
+
+      if (journals.length === 0) {
+        vscode.window.showInformationMessage(`No history for #${this.issue.id}`);
+        return;
+      }
+
+      // Build list of journal entries as quick pick items
+      const items = journals
+        .slice()
+        .reverse() // Most recent first
+        .map((j) => {
+          const date = new Date(j.created_on);
+          const dateStr = date.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
+          // Summarize changes
+          const changes = j.details
+            .map((d) => {
+              if (d.property === "attr") {
+                return `${d.name}: ${d.old_value || "∅"} → ${d.new_value || "∅"}`;
+              }
+              return d.name;
+            })
+            .join(", ");
+
+          const hasComment = j.notes && j.notes.trim().length > 0;
+          const label = hasComment
+            ? `$(comment) ${j.notes.substring(0, 60)}${j.notes.length > 60 ? "..." : ""}`
+            : changes
+              ? `$(diff) ${changes}`
+              : `$(git-commit) Update`;
+
+          return {
+            label,
+            description: `${j.user.name} • ${dateStr}`,
+            detail: hasComment && changes ? changes : undefined,
+            journal: j,
+          };
+        });
+
+      const selected = await vscode.window.showQuickPick(items, {
+        title: `History - #${this.issue.id}`,
+        placeHolder: `${journals.length} updates`,
+      });
+
+      // If user selected an entry with a comment, show full comment
+      if (selected && selected.journal.notes) {
+        const action = await vscode.window.showQuickPick(
+          [
+            { label: "$(copy) Copy comment", action: "copy" },
+            { label: "$(arrow-left) Back to history", action: "back" },
+          ],
+          { title: `Comment by ${selected.journal.user.name}` }
+        );
+
+        if (action?.action === "copy") {
+          await vscode.env.clipboard.writeText(selected.journal.notes);
+          showStatusBarMessage("$(check) Copied to clipboard", 2000);
+        } else if (action?.action === "back") {
+          this.viewHistory();
+        }
       }
     } catch (error) {
       vscode.window.showErrorMessage(errorToString(error));
