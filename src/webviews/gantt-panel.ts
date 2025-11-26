@@ -1012,12 +1012,20 @@ export class GanttPanel {
     const redoBtn = document.getElementById('redoBtn');
 
     // Restore state from previous session
-    const previousState = vscode.getState() || { undoStack: [], redoStack: [], labelWidth: ${labelWidth} };
+    const previousState = vscode.getState() || { undoStack: [], redoStack: [], labelWidth: ${labelWidth}, scrollLeft: null, scrollTop: null };
     const undoStack = previousState.undoStack || [];
     const redoStack = previousState.redoStack || [];
+    let savedScrollLeft = previousState.scrollLeft;
+    let savedScrollTop = previousState.scrollTop;
 
     function saveState() {
-      vscode.setState({ undoStack, redoStack, labelWidth: ganttLeft?.offsetWidth || ${labelWidth} });
+      vscode.setState({
+        undoStack,
+        redoStack,
+        labelWidth: ganttLeft?.offsetWidth || ${labelWidth},
+        scrollLeft: timelineColumn?.scrollLeft ?? null,
+        scrollTop: timelineColumn?.scrollTop ?? null
+      });
     }
 
     function updateUndoRedoButtons() {
@@ -1058,18 +1066,23 @@ export class GanttPanel {
 
     // Zoom toggle handlers
     document.getElementById('zoomDay').addEventListener('click', () => {
+      saveState();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'day' });
     });
     document.getElementById('zoomWeek').addEventListener('click', () => {
+      saveState();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'week' });
     });
     document.getElementById('zoomMonth').addEventListener('click', () => {
+      saveState();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'month' });
     });
     document.getElementById('zoomQuarter').addEventListener('click', () => {
+      saveState();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'quarter' });
     });
     document.getElementById('zoomYear').addEventListener('click', () => {
+      saveState();
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'year' });
     });
 
@@ -1081,6 +1094,7 @@ export class GanttPanel {
         const fromId = arrow.dataset.from;
         const toId = arrow.dataset.to;
         if (confirm('Delete relation from #' + fromId + ' to #' + toId + '?')) {
+          saveState();
           vscode.postMessage({ command: 'deleteRelation', relationId });
         }
       });
@@ -1162,6 +1176,7 @@ export class GanttPanel {
           if (relationType) {
             const input = relationType.toLowerCase();
             const type = input.startsWith('p') ? 'precedes' : input.startsWith('f') ? 'follows' : 'blocks';
+            saveState();
             vscode.postMessage({
               command: 'createRelation',
               issueId: linkingState.fromId,
@@ -1307,8 +1322,19 @@ export class GanttPanel {
       }
     }
 
-    // Auto-scroll on load
-    scrollToToday();
+    // Restore scroll position or scroll to today on initial load
+    if (savedScrollLeft !== null && timelineColumn) {
+      timelineColumn.scrollLeft = savedScrollLeft;
+      if (savedScrollTop !== null) {
+        timelineColumn.scrollTop = savedScrollTop;
+        labelsColumn.scrollTop = savedScrollTop;
+      }
+      // Clear saved scroll so next fresh load goes to today
+      savedScrollLeft = null;
+      savedScrollTop = null;
+    } else {
+      scrollToToday();
+    }
 
     // Today button handler
     document.getElementById('todayBtn').addEventListener('click', scrollToToday);
