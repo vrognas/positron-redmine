@@ -1686,8 +1686,8 @@ export class GanttPanel {
 
       // Handle linking drag
       if (linkingState && tempArrow) {
-        const svg = document.querySelector('#ganttTimeline svg');
-        const rect = svg.getBoundingClientRect();
+        // Use container rect + scroll to get SVG coordinates
+        const rect = timelineColumn.getBoundingClientRect();
         const scrollLeft = timelineColumn.scrollLeft;
         const scrollTop = timelineColumn.scrollTop;
         const endX = e.clientX - rect.left + scrollLeft;
