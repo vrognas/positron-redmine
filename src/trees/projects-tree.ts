@@ -208,7 +208,7 @@ export class ProjectsTree implements vscode.TreeDataProvider<TreeItem> {
       return [{ isLoadingPlaceholder: true, message: "Loading projects..." }];
     }
 
-    if (!this.projects || this.projects.length === 0) {
+    if (!this.projects) {
       this.isLoadingProjects = true;
       try {
         // Fetch projects and assigned issues in parallel
@@ -242,6 +242,9 @@ export class ProjectsTree implements vscode.TreeDataProvider<TreeItem> {
 
         // Build project nodes
         this.projectNodes = this.projects.map((p) => this.createProjectNode(p));
+
+        // Fire refresh in case VS Code received a loading placeholder during async load
+        this.onDidChangeTreeData$.fire();
       } finally {
         this.isLoadingProjects = false;
       }
