@@ -1566,12 +1566,19 @@ export class GanttPanel {
       }
     }
 
-    // Handle click on bar (open issue) - use bar-outline which always exists
-    document.querySelectorAll('.issue-bar .bar-outline').forEach(bar => {
+    // Handle click on bar (open issue) - attach to entire issue-bar group
+    document.querySelectorAll('.issue-bar').forEach(bar => {
       bar.addEventListener('click', (e) => {
+        // Ignore if clicking on drag handles or link handle
+        const target = e.target;
+        if (target.classList.contains('drag-handle') ||
+            target.classList.contains('drag-left') ||
+            target.classList.contains('drag-right') ||
+            target.classList.contains('link-handle')) {
+          return;
+        }
         if (dragState || linkingState) return;
-        const issueBar = bar.closest('.issue-bar');
-        const issueId = parseInt(issueBar.dataset.issueId);
+        const issueId = parseInt(bar.dataset.issueId);
         vscode.postMessage({ command: 'openIssue', issueId });
       });
     });
