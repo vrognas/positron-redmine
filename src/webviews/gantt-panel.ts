@@ -957,20 +957,19 @@ export class GanttPanel {
           const target = issuePositions.get(rel.targetId);
           if (!source || !target) return "";
 
-          // Arrow from end of source bar to start of target bar
-          const x1 = source.endX + 2; // Small gap from bar
+          // Arrow from end of source bar to appropriate edge of target bar
+          const x1 = source.endX + 2; // Small gap from source bar end
           const y1 = source.y;
-          const x2 = target.startX - 2; // Small gap to bar
           const y2 = target.y;
 
           const style = relationStyles[rel.type] || relationStyles.relates;
           const arrowSize = 6;
-
-          // Simple elbow path: horizontal out, vertical to target row, horizontal to target
-          // Much cleaner and easier to follow than bezier curves
           const gap = 12; // Horizontal gap before turning
-          const goingRight = x2 > x1;
-          const midX = goingRight ? x1 + gap : x1 + gap; // Always go right first, then adjust
+
+          // Determine direction: target to right or left of source?
+          const goingRight = target.startX > source.endX;
+          // Arrow points to left edge if going right, right edge if going left
+          const x2 = goingRight ? target.startX - 2 : target.endX + 2;
 
           let path: string;
           let arrowHeadX: number;
@@ -981,13 +980,14 @@ export class GanttPanel {
             arrowHeadX = x2;
           } else if (goingRight) {
             // Target to the right, different row - simple elbow
+            const midX = x1 + gap;
             path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`;
             arrowHeadX = x2;
           } else {
-            // Target to the left - need to route around
-            // Go right first, then down/up, then left
+            // Target to the left - route around: right, vertical, left to target's right edge
+            const midX = x1 + gap;
             const routeY = y2 > y1 ? Math.max(y1, y2) + barHeight : Math.min(y1, y2) - barHeight;
-            path = `M ${x1} ${y1} H ${midX} V ${routeY} H ${x2 - gap} V ${y2} H ${x2 + arrowSize}`;
+            path = `M ${x1} ${y1} H ${midX} V ${routeY} H ${x2 + gap} V ${y2} H ${x2 + arrowSize}`;
             arrowHeadX = x2;
           }
 
@@ -1221,9 +1221,9 @@ ${style.tip}
     .issue-bar.link-target .bar-outline { stroke-width: 2; stroke: var(--vscode-charts-green); }
     .temp-link-arrow { pointer-events: none; }
     .dependency-arrow .arrow-line { transition: stroke-width 0.15s, filter 0.15s; }
-    .dependency-arrow .arrow-head { transition: transform 0.15s; }
+    .dependency-arrow .arrow-head { transition: filter 0.15s; }
     .dependency-arrow:hover .arrow-line { stroke-width: 3 !important; filter: brightness(1.2); }
-    .dependency-arrow:hover .arrow-head { transform: scale(1.2); transform-origin: center; }
+    .dependency-arrow:hover .arrow-head { filter: brightness(1.2); }
     /* Relation type colors in legend */
     .relation-legend { display: flex; gap: 12px; font-size: 11px; margin-left: 12px; align-items: center; }
     .relation-legend-item { display: flex; align-items: center; gap: 4px; opacity: 0.8; }
