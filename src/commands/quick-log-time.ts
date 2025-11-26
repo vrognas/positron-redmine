@@ -178,10 +178,12 @@ async function pickIssueAndActivity(
   ].slice(0, 10);
   await context.globalState.update("recentIssueIds", updatedRecent);
 
-  // Pick activity
-  const activities = await props.server.getTimeEntryActivities();
+  // Pick activity (use project-specific activities if configured)
+  const activities = await props.server.getProjectTimeEntryActivities(
+    picked.issue.project.id
+  );
   const activity = await vscode.window.showQuickPick(
-    activities.time_entry_activities.map((a) => ({
+    activities.map((a) => ({
       label: a.name,
       description: a.is_default ? "Default" : undefined,
       activity: a,

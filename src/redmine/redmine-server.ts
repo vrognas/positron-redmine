@@ -344,6 +344,34 @@ export class RedmineServer {
     };
   }
 
+  /**
+   * Get activities for a specific project (Redmine 3.4.0+)
+   * Projects can restrict which activities are available
+   * Falls back to global activities if project has no restrictions
+   */
+  async getProjectTimeEntryActivities(
+    projectId: number | string
+  ): Promise<TimeEntryActivity[]> {
+    try {
+      const response = await this.doRequest<{
+        project: {
+          time_entry_activities?: TimeEntryActivity[];
+        };
+      }>(`/projects/${projectId}.json?include=time_entry_activities`, "GET");
+
+      const projectActivities = response?.project?.time_entry_activities;
+      if (projectActivities && projectActivities.length > 0) {
+        return projectActivities;
+      }
+    } catch {
+      // Project-specific activities not available, fall through to global
+    }
+
+    // Fallback to global activities
+    const global = await this.getTimeEntryActivities();
+    return global.time_entry_activities;
+  }
+
   addTimeEntry(
     issueId: number,
     activityId: number,
@@ -399,6 +427,13 @@ export class RedmineServer {
   }
 
   /**
+   * Fetch issue with full journal history (updates/comments)
+   */
+  getIssueWithJournals(issueId: number): Promise<{ issue: Issue }> {
+    return this.doRequest(`/issues/${issueId}.json?include=journals`, "GET");
+  }
+
+  /**
    * Returns promise, that resolves, when issue status is set
    */
   setIssueStatus(issue: Issue, statusId: number): Promise<unknown> {
@@ -441,8 +476,9 @@ export class RedmineServer {
   /**
    * Create a relation between two issues
    * @param relationType One of: relates, duplicates, blocks, precedes, follows, copied_to
+   * @returns The created relation with its ID
    */
-  createRelation(
+  async createRelation(
     issueId: number,
     targetIssueId: number,
     relationType:
@@ -452,8 +488,10 @@ export class RedmineServer {
       | "precedes"
       | "follows"
       | "copied_to"
-  ): Promise<unknown> {
-    return this.doRequest(
+  ): Promise<{ relation: { id: number; issue_id: number; issue_to_id: number; relation_type: string } }> {
+    const response = await this.doRequest<{
+      relation: { id: number; issue_id: number; issue_to_id: number; relation_type: string };
+    }>(
       `/issues/${issueId}/relations.json`,
       "POST",
       Buffer.from(
@@ -466,6 +504,7 @@ export class RedmineServer {
         "utf8"
       )
     );
+    return response!;
   }
 
   /**

@@ -20,10 +20,13 @@ const ZOOM_PIXELS_PER_DAY: Record<ZoomLevel, number> = {
   year: 0.8,
 };
 
+// All Redmine relation types
+type RelationType = "relates" | "duplicates" | "blocks" | "precedes" | "follows" | "copied_to";
+
 interface GanttRelation {
   id: number;
   targetId: number;
-  type: "blocks" | "precedes" | "follows";
+  type: RelationType;
 }
 
 interface GanttIssue {
@@ -37,6 +40,7 @@ interface GanttIssue {
   parentId: number | null;
   estimated_hours: number | null;
   spent_hours: number | null;
+  done_ratio: number;
   relations: GanttRelation[];
 }
 
@@ -46,6 +50,8 @@ interface GanttRow {
   label: string;
   depth: number;
   issue?: GanttIssue;
+  /** True if this issue has subtasks (dates/hours are derived) */
+  isParent?: boolean;
 }
 
 /**
@@ -97,12 +103,15 @@ function buildHierarchicalRows(issues: GanttIssue[]): GanttRow[] {
     function addIssues(parentId: number | null, depth: number) {
       const childIssues = children.get(parentId) || [];
       for (const issue of childIssues) {
+        // Check if this issue has children (is a parent)
+        const hasChildren = children.has(issue.id) && children.get(issue.id)!.length > 0;
         rows.push({
           type: "issue",
           id: issue.id,
           label: issue.subject,
           depth,
           issue,
+          isParent: hasChildren,
         });
         addIssues(issue.id, depth + 1);
       }
@@ -133,14 +142,14 @@ function escapeHtml(str: string): string {
 function formatDateWithWeekday(dateStr: string | null): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
-  return `${dateStr} (${WEEKDAYS[d.getDay()]})`;
+  return `${dateStr} (${WEEKDAYS[d.getUTCDay()]})`;
 }
 
 /**
- * Get ISO week number for a date
+ * Get ISO week number for a date (uses UTC to avoid timezone issues)
  */
 function getWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
@@ -163,7 +172,7 @@ function formatHoursAsTime(hours: number | null): string {
  */
 function getDayKey(date: Date): keyof WeeklySchedule {
   const keys: (keyof WeeklySchedule)[] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return keys[date.getDay()];
+  return keys[date.getUTCDay()];
 }
 
 /**
@@ -190,7 +199,7 @@ function calculateDailyIntensity(
   const current = new Date(start);
   while (current <= end) {
     totalAvailable += schedule[getDayKey(current)];
-    current.setDate(current.getDate() + 1);
+    current.setUTCDate(current.getUTCDate() + 1);
   }
 
   if (totalAvailable === 0 || estimatedHours === 0) {
@@ -213,7 +222,7 @@ function calculateDailyIntensity(
     // For uniform distribution: allocated = dayHours * (estimated / totalAvailable)
     const intensity = dayHours > 0 ? hoursPerAvailableHour : 0;
     result.push({ dayOffset, intensity: Math.min(intensity, 1.5) }); // Cap at 1.5 for display
-    current.setDate(current.getDate() + 1);
+    current.setUTCDate(current.getUTCDate() + 1);
     dayOffset++;
   }
 
@@ -236,7 +245,7 @@ function calculateAggregateWorkload(
   const current = new Date(minDate);
   while (current <= maxDate) {
     workloadMap.set(current.toISOString().slice(0, 10), 0);
-    current.setDate(current.getDate() + 1);
+    current.setUTCDate(current.getUTCDate() + 1);
   }
 
   // For each issue, distribute its estimated hours across its date range
@@ -254,7 +263,7 @@ function calculateAggregateWorkload(
     const temp = new Date(start);
     while (temp <= end) {
       totalAvailable += schedule[getDayKey(temp)];
-      temp.setDate(temp.getDate() + 1);
+      temp.setUTCDate(temp.getUTCDate() + 1);
     }
 
     if (totalAvailable === 0) continue;
@@ -272,7 +281,7 @@ function calculateAggregateWorkload(
         const current = workloadMap.get(dateKey) ?? 0;
         workloadMap.set(dateKey, current + intensity);
       }
-      temp.setDate(temp.getDate() + 1);
+      temp.setUTCDate(temp.getUTCDate() + 1);
     }
   }
 
@@ -305,6 +314,7 @@ export class GanttPanel {
   private _zoomLevel: ZoomLevel = "day";
   private _schedule: WeeklySchedule = DEFAULT_SCHEDULE;
   private _showWorkloadHeatmap: boolean = false;
+  private _scrollPosition: { left: number; top: number } = { left: 0, top: 0 };
 
   private constructor(panel: vscode.WebviewPanel, server?: RedmineServer) {
     this._panel = panel;
@@ -438,12 +448,19 @@ export class GanttPanel {
         parentId: i.parent?.id ?? null,
         estimated_hours: i.estimated_hours ?? null,
         spent_hours: i.spent_hours ?? null,
+        done_ratio: i.done_ratio ?? 0,
         relations: (i.relations || [])
-          .filter((r) => r.relation_type === "blocks" || r.relation_type === "precedes" || r.relation_type === "follows")
+          // Filter out reverse relation types (Redmine returns both directions)
+          // Keep only "forward" types to avoid duplicate arrows
+          // Skip: blocked (reverse of blocks), duplicated (reverse of duplicates),
+          //       copied_from (reverse of copied_to), follows (reverse of precedes)
+          .filter((r) => !["blocked", "duplicated", "copied_from", "follows"].includes(r.relation_type))
+          // Skip self-referencing relations (bug protection)
+          .filter((r) => r.issue_to_id !== i.id && r.issue_id !== r.issue_to_id)
           .map((r) => ({
             id: r.id,
             targetId: r.issue_to_id,
-            type: r.relation_type as "blocks" | "precedes" | "follows",
+            type: r.relation_type as RelationType,
           })),
       }));
 
@@ -462,7 +479,10 @@ export class GanttPanel {
     zoomLevel?: ZoomLevel;
     relationId?: number;
     targetIssueId?: number;
-    relationType?: "blocks" | "precedes" | "follows";
+    relationType?: RelationType;
+    left?: number;
+    top?: number;
+    operation?: string;
   }): void {
     switch (message.command) {
       case "openIssue":
@@ -502,7 +522,31 @@ export class GanttPanel {
         break;
       case "toggleWorkloadHeatmap":
         this._showWorkloadHeatmap = !this._showWorkloadHeatmap;
-        this._updateContent();
+        // Send message to webview to toggle visibility without full re-render
+        this._panel.webview.postMessage({
+          command: "setHeatmapState",
+          enabled: this._showWorkloadHeatmap,
+        });
+        break;
+      case "refresh":
+        // Refresh data without resetting view state
+        vscode.commands.executeCommand("redmine.refreshGanttData");
+        break;
+      case "scrollPosition":
+        // Store scroll position for restoration after update
+        if (message.left !== undefined && message.top !== undefined) {
+          this._scrollPosition = { left: message.left, top: message.top };
+        }
+        break;
+      case "undoRelation":
+        if (this._server && message.operation) {
+          this._handleUndoRelation(message as { operation: string; relationId?: number; issueId?: number; targetIssueId?: number; relationType?: string });
+        }
+        break;
+      case "redoRelation":
+        if (this._server && message.operation) {
+          this._handleRedoRelation(message as { operation: string; relationId?: number; issueId?: number; targetIssueId?: number; relationType?: string });
+        }
         break;
     }
   }
@@ -538,7 +582,41 @@ export class GanttPanel {
     if (!this._server) return;
 
     try {
+      // Find relation info before deleting (for undo)
+      let relationInfo: {
+        issueId: number;
+        targetIssueId: number;
+        relationType: string;
+      } | null = null;
+      for (const issue of this._issues) {
+        const rel = issue.relations.find((r) => r.id === relationId);
+        if (rel) {
+          relationInfo = {
+            issueId: issue.id,
+            targetIssueId: rel.targetId,
+            relationType: rel.type,
+          };
+          break;
+        }
+      }
+
       await this._server.deleteRelation(relationId);
+
+      // Send undo action to webview (before local state update)
+      if (relationInfo) {
+        this._panel.webview.postMessage({
+          command: "pushUndoAction",
+          action: {
+            type: "relation",
+            operation: "delete",
+            relationId,
+            issueId: relationInfo.issueId,
+            targetIssueId: relationInfo.targetIssueId,
+            relationType: relationInfo.relationType,
+          },
+        });
+      }
+
       // Remove from local data and re-render
       for (const issue of this._issues) {
         issue.relations = issue.relations.filter((r) => r.id !== relationId);
@@ -555,24 +633,143 @@ export class GanttPanel {
   private async _createRelation(
     issueId: number,
     targetIssueId: number,
-    relationType: "blocks" | "precedes" | "follows"
+    relationType: RelationType
   ): Promise<void> {
     if (!this._server) return;
 
-    const labels: Record<string, string> = {
+    const labels: Record<RelationType, string> = {
+      relates: "Related to",
+      duplicates: "Duplicates",
       blocks: "Blocks",
       precedes: "Precedes",
       follows: "Follows",
+      copied_to: "Copied to",
     };
 
     try {
-      await this._server.createRelation(issueId, targetIssueId, relationType);
-      // Refresh by triggering a full reload via VS Code command
-      vscode.commands.executeCommand("redmine.refreshIssues");
+      // Capture dates before creation (Redmine may adjust dates for precedes/blocks)
+      const sourceIssue = this._issues.find((i) => i.id === issueId);
+      const targetIssue = this._issues.find((i) => i.id === targetIssueId);
+      const datesBefore = {
+        source: { start: sourceIssue?.start_date, due: sourceIssue?.due_date },
+        target: { start: targetIssue?.start_date, due: targetIssue?.due_date },
+      };
+
+      // Create relation and get the ID
+      const response = await this._server.createRelation(issueId, targetIssueId, relationType);
+      const relationId = response.relation.id;
+
       showStatusBarMessage(`$(check) ${labels[relationType]} relation created`, 2000);
+
+      // Send undo action to webview before refreshing
+      this._panel.webview.postMessage({
+        command: "pushUndoAction",
+        action: {
+          type: "relation",
+          operation: "create",
+          relationId,
+          issueId,
+          targetIssueId,
+          relationType,
+          datesBefore,
+        },
+      });
+
+      // Refresh data without resetting view
+      vscode.commands.executeCommand("redmine.refreshGanttData");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      // Map Redmine validation errors to user-friendly messages
+      const friendlyMessages: Record<string, string> = {
+        "doesn't belong to the same project": "Issues must be in the same project",
+        "cannot be linked to one of its subtasks": "Cannot link parent to its subtask",
+        "cannot be linked to one of its ancestors": "Cannot link to ancestor issue",
+        "already exists": "This relation already exists",
+        "is invalid": "Invalid relation type",
+      };
+      let friendly = msg;
+      for (const [pattern, replacement] of Object.entries(friendlyMessages)) {
+        if (msg.toLowerCase().includes(pattern.toLowerCase())) {
+          friendly = replacement;
+          break;
+        }
+      }
+      vscode.window.showErrorMessage(`Cannot create relation: ${friendly}`);
+    }
+  }
+
+  private async _handleUndoRelation(message: {
+    operation: string;
+    relationId?: number;
+    issueId?: number;
+    targetIssueId?: number;
+    relationType?: string;
+  }): Promise<void> {
+    if (!this._server) return;
+
+    try {
+      if (message.operation === "delete" && message.relationId) {
+        // Undo create = delete the relation
+        await this._server.deleteRelation(message.relationId);
+        showStatusBarMessage("$(check) Relation undone", 2000);
+      } else if (message.operation === "create" && message.issueId && message.targetIssueId && message.relationType) {
+        // Undo delete = recreate the relation
+        const response = await this._server.createRelation(
+          message.issueId,
+          message.targetIssueId,
+          message.relationType as RelationType
+        );
+        // Send new relationId to update redo stack
+        this._panel.webview.postMessage({
+          command: "updateRelationId",
+          stack: "redo",
+          newRelationId: response.relation.id,
+        });
+        showStatusBarMessage("$(check) Relation restored", 2000);
+      }
+      // Refresh to show updated state
+      vscode.commands.executeCommand("redmine.refreshGanttData");
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Failed to create relation: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to undo relation: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async _handleRedoRelation(message: {
+    operation: string;
+    relationId?: number;
+    issueId?: number;
+    targetIssueId?: number;
+    relationType?: string;
+  }): Promise<void> {
+    if (!this._server) return;
+
+    try {
+      if (message.operation === "create" && message.issueId && message.targetIssueId && message.relationType) {
+        // Redo create = recreate the relation
+        const response = await this._server.createRelation(
+          message.issueId,
+          message.targetIssueId,
+          message.relationType as RelationType
+        );
+        // Send new relationId to update undo stack
+        this._panel.webview.postMessage({
+          command: "updateRelationId",
+          stack: "undo",
+          newRelationId: response.relation.id,
+        });
+        showStatusBarMessage("$(check) Relation recreated", 2000);
+      } else if (message.operation === "delete" && message.relationId) {
+        // Redo delete = delete the relation again
+        await this._server.deleteRelation(message.relationId);
+        showStatusBarMessage("$(check) Relation deleted", 2000);
+      }
+      // Refresh to show updated state
+      vscode.commands.executeCommand("redmine.refreshGanttData");
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Failed to redo relation: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -605,9 +802,13 @@ export class GanttPanel {
       Math.max(...dates.map((d) => new Date(d).getTime()))
     );
 
-    // Add padding days
-    minDate.setDate(minDate.getDate() - 7);
-    maxDate.setDate(maxDate.getDate() + 7);
+    // Add padding days (use UTC to avoid timezone issues)
+    minDate.setUTCDate(minDate.getUTCDate() - 7);
+    maxDate.setUTCDate(maxDate.getUTCDate() + 7);
+
+    // Today for past-bar detection (start of today UTC)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
 
     const totalDays = Math.ceil(
       (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -656,7 +857,7 @@ export class GanttPanel {
         ].join("\n");
 
         return `
-          <g class="issue-label" data-issue-id="${issue.id}" style="cursor: pointer;">
+          <g class="issue-label" data-issue-id="${issue.id}" tabindex="0" role="button" aria-label="Open issue #${issue.id}" style="cursor: pointer;">
             <text x="${5 + indent}" y="${y + barHeight / 2 + 5}" fill="var(--vscode-foreground)" font-size="12">
               #${issue.id} ${escapedSubject}
             </text>
@@ -675,6 +876,7 @@ export class GanttPanel {
         }
 
         const issue = row.issue!;
+        const isParent = row.isParent ?? false;
         const start = issue.start_date
           ? new Date(issue.start_date)
           : new Date(issue.due_date!);
@@ -684,7 +886,7 @@ export class GanttPanel {
 
         // Add 1 day to end to get END of due_date (not start/midnight)
         const endPlusOne = new Date(end);
-        endPlusOne.setDate(endPlusOne.getDate() + 1);
+        endPlusOne.setUTCDate(endPlusOne.getUTCDate() + 1);
 
         const startX =
           ((start.getTime() - minDate.getTime()) /
@@ -697,24 +899,40 @@ export class GanttPanel {
 
         const width = Math.max(10, endX - startX);
         const y = index * (barHeight + barGap); // Y starts at 0 in body SVG
-        const color = this._getStatusColor(issue.status);
+        const color = isParent ? "var(--vscode-descriptionForeground)" : this._getStatusColor(issue.status);
+        const isPast = end < today;
+
+        // Calculate past portion (from start to today)
+        const todayX =
+          ((today.getTime() - minDate.getTime()) /
+            (maxDate.getTime() - minDate.getTime())) *
+          timelineWidth;
+        // Past portion: from bar start to min(todayX, barEnd) - skip for parent issues
+        const pastEndX = Math.min(todayX, endX);
+        const pastWidth = Math.max(0, pastEndX - startX);
+        const hasPastPortion = !isParent && start < today && pastWidth > 0;
 
         const escapedSubject = escapeHtml(issue.subject);
         const escapedProject = escapeHtml(issue.project);
+        const doneRatio = issue.done_ratio;
         const tooltip = [
           `#${issue.id} ${escapedSubject}`,
           `Project: ${escapedProject}`,
           `Start: ${formatDateWithWeekday(issue.start_date)}`,
           `Due: ${formatDateWithWeekday(issue.due_date)}`,
+          `Progress: ${doneRatio}%`,
           `Estimated: ${formatHoursAsTime(issue.estimated_hours)}`,
           `Spent: ${formatHoursAsTime(issue.spent_hours)}`,
         ].join("\n");
 
+        // Calculate done portion width for progress visualization
+        const doneWidth = (doneRatio / 100) * width;
+
         const handleWidth = 8;
 
-        // Calculate daily intensity for this issue
-        const intensities = calculateDailyIntensity(issue, this._schedule);
-        const hasIntensity = intensities.length > 0 && issue.estimated_hours !== null;
+        // Calculate daily intensity for this issue (skip for parent issues - work is in subtasks)
+        const intensities = isParent ? [] : calculateDailyIntensity(issue, this._schedule);
+        const hasIntensity = !isParent && intensities.length > 0 && issue.estimated_hours !== null;
 
         // Generate intensity segments and line chart
         let intensitySegments = "";
@@ -725,11 +943,14 @@ export class GanttPanel {
           const segmentWidth = width / dayCount;
 
           // Generate day segments with varying opacity
+          // Scale intensity to 0-1 range where 1.5 (max stored) = full opacity
+          const maxIntensityForOpacity = 1.5;
           intensitySegments = intensities
             .map((d, i) => {
               const segX = startX + i * segmentWidth;
-              // Opacity: base 0.2 + intensity * 0.6 (range 0.2 to 0.8)
-              const opacity = 0.2 + Math.min(d.intensity, 1) * 0.6;
+              // Opacity: base 0.2 + normalized intensity * 0.6 (range 0.2 to 0.8)
+              const normalizedForOpacity = Math.min(d.intensity, maxIntensityForOpacity) / maxIntensityForOpacity;
+              const opacity = 0.2 + normalizedForOpacity * 0.6;
               const isFirst = i === 0;
               const isLast = i === dayCount - 1;
               // Use clip-path for proper corner rounding on first/last
@@ -740,12 +961,15 @@ export class GanttPanel {
             .join("");
 
           // Generate step function path (horizontal line per day, step at boundaries)
+          // Scale intensity to 0-1 range where 1.5 (max stored) = full height
+          const maxIntensity = 1.5;
           const stepPoints: string[] = [];
           intensities.forEach((d, i) => {
             const dayStartX = startX + i * segmentWidth;
             const dayEndX = startX + (i + 1) * segmentWidth;
-            // Line Y: bottom of bar (y + barHeight) minus intensity * barHeight
-            const py = y + barHeight - Math.min(d.intensity, 1) * (barHeight - 4);
+            // Line Y: bottom of bar minus normalized intensity * bar height
+            const normalizedIntensity = Math.min(d.intensity, maxIntensity) / maxIntensity;
+            const py = y + barHeight - normalizedIntensity * (barHeight - 4);
             if (i === 0) {
               // Move to start of first day
               stepPoints.push(`M ${dayStartX.toFixed(1)},${py.toFixed(1)}`);
@@ -754,7 +978,8 @@ export class GanttPanel {
             stepPoints.push(`H ${dayEndX.toFixed(1)}`);
             // Step to next day's height (if not last day)
             if (i < intensities.length - 1) {
-              const nextPy = y + barHeight - Math.min(intensities[i + 1].intensity, 1) * (barHeight - 4);
+              const nextNormalized = Math.min(intensities[i + 1].intensity, maxIntensity) / maxIntensity;
+              const nextPy = y + barHeight - nextNormalized * (barHeight - 4);
               stepPoints.push(`V ${nextPy.toFixed(1)}`);
             }
           });
@@ -764,11 +989,43 @@ export class GanttPanel {
                                  stroke-width="1.5" opacity="0.7"/>`;
         }
 
+        // Parent issues: summary bar (no fill, no drag, no link handle)
+        if (isParent) {
+          // Parent done_ratio is weighted average of subtasks
+          const parentDoneWidth = (doneRatio / 100) * (endX - startX - 8);
+          return `
+            <g class="issue-bar parent-bar" data-issue-id="${issue.id}"
+               data-start-date="${issue.start_date || ""}"
+               data-due-date="${issue.due_date || ""}"
+               data-start-x="${startX}" data-end-x="${endX}"
+               tabindex="0" role="button" aria-label="#${issue.id} ${escapedSubject} (parent, ${doneRatio}% done)">
+              <!-- Summary bar: bracket-style with downward arrows at ends -->
+              <path class="bar-outline" d="M ${startX + 4} ${y + barHeight * 0.3}
+                    L ${startX + 4} ${y + barHeight * 0.7}
+                    L ${startX} ${y + barHeight}
+                    M ${startX + 4} ${y + barHeight * 0.5}
+                    H ${endX - 4}
+                    M ${endX - 4} ${y + barHeight * 0.3}
+                    L ${endX - 4} ${y + barHeight * 0.7}
+                    L ${endX} ${y + barHeight}"
+                    fill="none" stroke="${color}" stroke-width="2" opacity="0.8" style="cursor: pointer;"/>
+              ${doneRatio > 0 ? `
+                <!-- Progress line showing done_ratio on parent -->
+                <line class="parent-progress" x1="${startX + 4}" y1="${y + barHeight * 0.5}"
+                      x2="${startX + 4 + parentDoneWidth}" y2="${y + barHeight * 0.5}"
+                      stroke="var(--vscode-charts-green)" stroke-width="3" opacity="0.8"/>
+              ` : ""}
+              <title>${tooltip} (parent - ${doneRatio}% done)</title>
+            </g>
+          `;
+        }
+
         return `
-          <g class="issue-bar" data-issue-id="${issue.id}"
+          <g class="issue-bar${isPast ? " bar-past" : ""}" data-issue-id="${issue.id}"
              data-start-date="${issue.start_date || ""}"
              data-due-date="${issue.due_date || ""}"
-             data-start-x="${startX}" data-end-x="${endX}">
+             data-start-x="${startX}" data-end-x="${endX}"
+             tabindex="0" role="button" aria-label="#${issue.id} ${escapedSubject}">
             ${hasIntensity ? `
               <!-- Intensity segments -->
               <g class="bar-intensity">${intensitySegments}</g>
@@ -779,6 +1036,16 @@ export class GanttPanel {
               <rect class="bar-main" x="${startX}" y="${y}" width="${width}" height="${barHeight}"
                     fill="${color}" rx="4" ry="4" opacity="0.3"/>
             `}
+            ${hasPastPortion ? `
+              <!-- Past portion overlay with diagonal stripes -->
+              <rect class="past-overlay" x="${startX}" y="${y}" width="${pastWidth}" height="${barHeight}"
+                    fill="url(#past-stripes)" rx="4" ry="4"/>
+            ` : ""}
+            ${doneRatio > 0 && doneRatio < 100 ? `
+              <!-- Progress fill showing done_ratio -->
+              <rect class="progress-fill" x="${startX}" y="${y}" width="${doneWidth}" height="${barHeight}"
+                    fill="${color}" rx="4" ry="4" opacity="0.5"/>
+            ` : ""}
             <!-- Border/outline -->
             <rect class="bar-outline" x="${startX}" y="${y}" width="${width}" height="${barHeight}"
                   fill="none" stroke="${color}" stroke-width="1" rx="4" ry="4" opacity="0.8" style="cursor: pointer;"/>
@@ -786,6 +1053,10 @@ export class GanttPanel {
                   fill="transparent" style="cursor: ew-resize;"/>
             <rect class="drag-handle drag-right" x="${startX + width - handleWidth}" y="${y}" width="${handleWidth}" height="${barHeight}"
                   fill="transparent" style="cursor: ew-resize;"/>
+            <!-- Link handle for creating relations -->
+            <circle class="link-handle" cx="${endX + 8}" cy="${y + barHeight / 2}" r="5"
+                    fill="var(--vscode-button-background)" stroke="var(--vscode-button-foreground)"
+                    stroke-width="1" opacity="0" style="cursor: crosshair;"/>
             <title>${tooltip}</title>
           </g>
         `;
@@ -805,7 +1076,7 @@ export class GanttPanel {
           : new Date(issue.start_date!);
         // Add 1 day to end to match bar width calculation
         const endPlusOne = new Date(end);
-        endPlusOne.setDate(endPlusOne.getDate() + 1);
+        endPlusOne.setUTCDate(endPlusOne.getUTCDate() + 1);
         const startX =
           ((start.getTime() - minDate.getTime()) /
             (maxDate.getTime() - minDate.getTime())) *
@@ -819,6 +1090,22 @@ export class GanttPanel {
       }
     });
 
+    // Relation type styling - only forward types (reverse types are filtered out)
+    // blocks/precedes/relates/duplicates/copied_to are shown
+    // blocked/follows/duplicated/copied_from are auto-generated reverses, filtered
+    const relationStyles: Record<string, { color: string; dash: string; label: string; tip: string }> = {
+      blocks: { color: "#e74c3c", dash: "", label: "blocks",
+        tip: "Target cannot be closed until source is closed" },
+      precedes: { color: "#9b59b6", dash: "", label: "precedes",
+        tip: "Source must complete before target can start" },
+      relates: { color: "#7f8c8d", dash: "4,3", label: "relates to",
+        tip: "Simple link (no constraints)" },
+      duplicates: { color: "#e67e22", dash: "2,2", label: "duplicates",
+        tip: "Closing target auto-closes source" },
+      copied_to: { color: "#1abc9c", dash: "6,2", label: "copied to",
+        tip: "Source was copied to create target" },
+    };
+
     const dependencyArrows = this._issues
       .flatMap((issue) =>
         issue.relations.map((rel) => {
@@ -826,51 +1113,85 @@ export class GanttPanel {
           const target = issuePositions.get(rel.targetId);
           if (!source || !target) return "";
 
-          // Draw elbow arrow from source end to target start
-          const x1 = source.endX;
-          const y1 = source.y;
-          const x2 = target.startX;
-          const y2 = target.y;
-
-          // Elbow path: right from source, down/up, then right to target
-          const midX = x1 + 15;
+          const style = relationStyles[rel.type] || relationStyles.relates;
           const arrowSize = 6;
+          const sameRow = Math.abs(source.y - target.y) < 5;
 
-          // Path: move right, then to target Y, then to target
-          const path =
-            x2 > x1
-              ? `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`
-              : `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 + arrowSize}`;
+          // Temporal relations (blocks, precedes): end → start
+          // Non-temporal relations (relates, duplicates, copied_to): center → center
+          const isTemporal = rel.type === "blocks" || rel.type === "precedes";
 
-          // Arrow head pointing right or left
-          const arrowHead =
-            x2 > x1
-              ? `M ${x2} ${y2} l -${arrowSize} -${arrowSize / 2} v ${arrowSize} Z`
-              : `M ${x2} ${y2} l ${arrowSize} -${arrowSize / 2} v ${arrowSize} Z`;
+          let x1: number, y1: number, x2: number, y2: number;
 
-          const colorMap: Record<string, string> = {
-            blocks: "var(--vscode-charts-orange)",
-            precedes: "var(--vscode-charts-purple)",
-            follows: "var(--vscode-charts-blue)",
-          };
-          const color = colorMap[rel.type] || "var(--vscode-charts-foreground)";
-          const typeLabel = rel.type;
+          if (isTemporal) {
+            // End of source → start of target
+            x1 = source.endX + 2;
+            y1 = source.y;
+            x2 = target.startX - 2;
+            y2 = target.y;
+          } else {
+            // Center of source → center of target
+            x1 = (source.startX + source.endX) / 2;
+            y1 = source.y;
+            x2 = (target.startX + target.endX) / 2;
+            y2 = target.y;
+          }
+
+          // Is target to the right (natural flow) or left/overlapping (route around)?
+          const goingRight = x2 > x1;
+          const horizontalDist = Math.abs(x2 - x1);
+          const nearlyVertical = horizontalDist < 30; // bars are vertically aligned
+
+          let path: string;
+
+          if (sameRow && goingRight) {
+            // Same row, target to right: straight horizontal line
+            path = `M ${x1} ${y1} H ${x2 - arrowSize}`;
+          } else if (!sameRow && nearlyVertical) {
+            // Nearly vertical: S-curve that jogs out and back
+            // Go right, down to midpoint, left to align, down to target
+            const jogX = 20; // small horizontal offset
+            const midY = (y1 + y2) / 2;
+            path = `M ${x1} ${y1} H ${x1 + jogX} V ${midY} H ${x2 - jogX} V ${y2} H ${x2 - arrowSize}`;
+          } else if (goingRight) {
+            // Different row, target to right: 3-segment elbow
+            const midX = (x1 + x2) / 2;
+            path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`;
+          } else if (sameRow) {
+            // Same row, target to left: must route above or below
+            const gap = 12;
+            const routeY = y1 - barHeight; // go above
+            path = `M ${x1} ${y1} V ${routeY} H ${x2 - gap} V ${y2} H ${x2 - arrowSize}`;
+          } else {
+            // Different row, target to left: route BETWEEN the bars (through the gap)
+            const gap = 12;
+            const midY = (y1 + y2) / 2; // midpoint falls in gap between rows
+            path = `M ${x1} ${y1} V ${midY} H ${x2 - gap} V ${y2} H ${x2 - arrowSize}`;
+          }
+
+          // Arrowhead points toward target
+          const arrowHead = `M ${x2} ${y2} l -${arrowSize} -${arrowSize * 0.6} l 0 ${arrowSize * 1.2} Z`;
+
+          const dashAttr = style.dash ? `stroke-dasharray="${style.dash}"` : "";
 
           return `
-            <g class="dependency-arrow" data-relation-id="${rel.id}" data-from="${issue.id}" data-to="${rel.targetId}" style="cursor: pointer;">
-              <path d="${path}" stroke="${color}" stroke-width="1.5" fill="none" opacity="0.7"/>
-              <path d="${arrowHead}" fill="${color}" opacity="0.7"/>
-              <title>#${issue.id} ${typeLabel} #${rel.targetId} (right-click to delete)</title>
+            <g class="dependency-arrow rel-${rel.type}" data-relation-id="${rel.id}" data-from="${issue.id}" data-to="${rel.targetId}" style="cursor: pointer;">
+              <!-- Wide invisible hit area for easier clicking -->
+              <path class="arrow-hit-area" d="${path}" stroke="transparent" stroke-width="16" fill="none"/>
+              <path class="arrow-line" d="${path}" stroke="${style.color}" stroke-width="2" fill="none" ${dashAttr}/>
+              <path class="arrow-head" d="${arrowHead}" fill="${style.color}"/>
+              <title>#${issue.id} ${style.label} #${rel.targetId}
+${style.tip}
+(right-click to delete)</title>
             </g>
           `;
         })
       )
+      .filter(Boolean)
       .join("");
 
-    // Calculate aggregate workload for heatmap (if enabled)
-    const workloadMap = this._showWorkloadHeatmap
-      ? calculateAggregateWorkload(this._issues, this._schedule, minDate, maxDate)
-      : undefined;
+    // Always calculate aggregate workload (needed for heatmap toggle without re-render)
+    const workloadMap = calculateAggregateWorkload(this._issues, this._schedule, minDate, maxDate);
 
     // Date markers split into fixed header and scrollable body
     const dateMarkers = this._generateDateMarkers(
@@ -879,12 +1200,11 @@ export class GanttPanel {
       timelineWidth,
       0,
       this._zoomLevel,
-      workloadMap
+      workloadMap,
+      this._showWorkloadHeatmap
     );
 
-    // Calculate today's position for auto-scroll
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Calculate today's position for auto-scroll (reuse today from above)
     const todayX =
       ((today.getTime() - minDate.getTime()) /
         (maxDate.getTime() - minDate.getTime())) *
@@ -967,6 +1287,25 @@ export class GanttPanel {
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
     }
+    .heatmap-legend {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 8px;
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+    }
+    .heatmap-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .heatmap-legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      opacity: 0.7;
+    }
     .gantt-container {
       display: flex;
       overflow: hidden;
@@ -1043,16 +1382,54 @@ export class GanttPanel {
     svg { display: block; }
     .issue-bar:hover .bar-main, .issue-bar:hover .bar-outline, .issue-label:hover { opacity: 1; }
     .issue-bar:hover .bar-intensity rect { filter: brightness(1.1); }
+    .issue-bar.bar-past { filter: saturate(0.4) opacity(0.7); }
+    .issue-bar.bar-past:hover { filter: saturate(0.6) opacity(0.85); }
+    .issue-bar.parent-bar { opacity: 0.7; }
+    .issue-bar.parent-bar:hover { opacity: 1; }
+    .past-overlay { pointer-events: none; }
+    .progress-fill { pointer-events: none; }
     .issue-bar .drag-handle:hover { fill: var(--vscode-list-hoverBackground); }
+    .issue-bar:hover .link-handle { opacity: 0.7; }
+    .issue-bar .link-handle:hover { opacity: 1; transform-origin: center; }
     .issue-bar.dragging .bar-main, .issue-bar.dragging .bar-intensity { opacity: 0.5; }
     .issue-bar.linking-source .bar-outline { stroke-width: 3; stroke: var(--vscode-focusBorder); }
+    .issue-bar.linking-source .link-handle { opacity: 1; }
+    .issue-bar.link-target .bar-outline { stroke-width: 2; stroke: var(--vscode-charts-green); }
+    .temp-link-arrow { pointer-events: none; }
+    .dependency-arrow .arrow-line { transition: stroke-width 0.15s, filter 0.15s; }
+    .dependency-arrow .arrow-head { transition: filter 0.15s; }
+    .dependency-arrow:hover .arrow-line { stroke-width: 3 !important; filter: brightness(1.2); }
+    .dependency-arrow:hover .arrow-head { filter: brightness(1.2); }
+    /* Relation type colors in legend */
+    .relation-legend { display: flex; gap: 12px; font-size: 11px; margin-left: 12px; align-items: center; }
+    .relation-legend-item { display: flex; align-items: center; gap: 4px; opacity: 0.8; }
+    .relation-legend-item:hover { opacity: 1; }
+    .relation-legend-line { width: 20px; height: 2px; }
+    .relation-picker { position: fixed; background: var(--vscode-dropdown-background); border: 1px solid var(--vscode-dropdown-border); border-radius: 4px; padding: 4px 0; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .relation-picker button { display: block; width: 100%; padding: 6px 12px; border: none; background: transparent; color: var(--vscode-dropdown-foreground); text-align: left; cursor: pointer; font-size: 12px; }
+    .relation-picker button:hover, .relation-picker button:focus { background: var(--vscode-list-hoverBackground); }
+    /* Focus indicators for accessibility */
+    button:focus { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
+    .issue-bar:focus-within .bar-outline, .issue-bar.focused .bar-outline { stroke-width: 3; stroke: var(--vscode-focusBorder); }
+    .issue-label:focus { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+    /* Screen reader only class */
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
     .weekend-bg { fill: var(--vscode-editor-inactiveSelectionBackground); opacity: 0.3; }
     .day-grid { stroke: var(--vscode-editorRuler-foreground); stroke-width: 0.5; opacity: 0.3; }
     .date-marker { stroke: var(--vscode-editorRuler-foreground); stroke-dasharray: 2,2; }
     .today-marker { stroke: var(--vscode-charts-red); stroke-width: 2; }
+    /* Respect reduced motion preference */
+    @media (prefers-reduced-motion: reduce) {
+      .spinner { animation: none; }
+      .skeleton-bar { animation: none; opacity: 0.5; }
+      .gantt-resize-handle { transition: none; }
+      .dependency-arrow .arrow-line { transition: none; }
+      .dependency-arrow .arrow-head { transition: none; }
+    }
   </style>
 </head>
 <body>
+  <div id="liveRegion" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
   <div class="gantt-header">
     <h2>Timeline</h2>
     <div class="gantt-actions">
@@ -1063,7 +1440,21 @@ export class GanttPanel {
         <button id="zoomQuarter" class="${this._zoomLevel === "quarter" ? "active" : ""}" title="Quarter view">Quarter</button>
         <button id="zoomYear" class="${this._zoomLevel === "year" ? "active" : ""}" title="Year view">Year</button>
       </div>
-      <button id="heatmapBtn" class="${this._showWorkloadHeatmap ? "active" : ""}" title="Toggle workload heatmap">Heatmap</button>
+      <button id="heatmapBtn" class="${this._showWorkloadHeatmap ? "active" : ""}" title="Toggle workload heatmap" aria-pressed="${this._showWorkloadHeatmap}">Heatmap</button>
+      <div class="heatmap-legend" style="${this._showWorkloadHeatmap ? "" : "display: none;"}">
+        <span class="heatmap-legend-item"><span class="heatmap-legend-color" style="background: var(--vscode-charts-green);"></span>&lt;80%</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-color" style="background: var(--vscode-charts-yellow);"></span>80-100%</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-color" style="background: var(--vscode-charts-orange);"></span>100-120%</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-color" style="background: var(--vscode-charts-red);"></span>&gt;120%</span>
+      </div>
+      <div class="relation-legend" title="Relation types (drag from link handle to create)">
+        <span class="relation-legend-item"><span class="relation-legend-line" style="background: #e74c3c;"></span>blocks</span>
+        <span class="relation-legend-item"><span class="relation-legend-line" style="background: #9b59b6;"></span>precedes</span>
+        <span class="relation-legend-item"><span class="relation-legend-line" style="background: #7f8c8d; border-style: dashed;"></span>relates</span>
+        <span class="relation-legend-item"><span class="relation-legend-line" style="background: #e67e22; border-style: dotted;"></span>duplicates</span>
+        <span class="relation-legend-item"><span class="relation-legend-line" style="background: #1abc9c; border-style: dashed;"></span>copied</span>
+      </div>
+      <button id="refreshBtn" title="Refresh issues">↻ Refresh</button>
       <button id="todayBtn" title="Jump to Today">Today</button>
       <button id="undoBtn" disabled title="Undo (Ctrl+Z)">↩ Undo</button>
       <button id="redoBtn" disabled title="Redo (Ctrl+Shift+Z)">↪ Redo</button>
@@ -1087,6 +1478,11 @@ export class GanttPanel {
       </div>
       <div class="gantt-timeline" id="ganttTimeline">
         <svg width="${timelineWidth}" height="${bodyHeight}">
+          <defs>
+            <pattern id="past-stripes" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="var(--vscode-charts-red)" stroke-width="2" stroke-opacity="0.4"/>
+            </pattern>
+          </defs>
           ${dateMarkers.body}
           ${bars}
           ${dependencyArrows}
@@ -1102,6 +1498,25 @@ export class GanttPanel {
     const totalDays = ${totalDays};
     const dayWidth = timelineWidth / totalDays;
 
+    // Cleanup previous event listeners (prevents accumulation on re-render)
+    if (window._ganttCleanup) {
+      window._ganttCleanup();
+    }
+    const docListeners = [];
+    const winListeners = [];
+    function addDocListener(type, handler, options) {
+      document.addEventListener(type, handler, options);
+      docListeners.push({ type, handler, options });
+    }
+    function addWinListener(type, handler, options) {
+      window.addEventListener(type, handler, options);
+      winListeners.push({ type, handler, options });
+    }
+    window._ganttCleanup = () => {
+      docListeners.forEach(l => document.removeEventListener(l.type, l.handler, l.options));
+      winListeners.forEach(l => window.removeEventListener(l.type, l.handler, l.options));
+    };
+
     // Snap x position to nearest day boundary
     function snapToDay(x) {
       return Math.round(x / dayWidth) * dayWidth;
@@ -1115,12 +1530,15 @@ export class GanttPanel {
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
 
-    // Restore state from previous session
+    // Restore state from previous session (use extension-stored position as fallback)
+    const extScrollLeft = ${this._scrollPosition.left};
+    const extScrollTop = ${this._scrollPosition.top};
     const previousState = vscode.getState() || { undoStack: [], redoStack: [], labelWidth: ${labelWidth}, scrollLeft: null, scrollTop: null, centerDateMs: null };
     const undoStack = previousState.undoStack || [];
     const redoStack = previousState.redoStack || [];
-    let savedScrollLeft = previousState.scrollLeft;
-    let savedScrollTop = previousState.scrollTop;
+    // Use webview state if available, otherwise use extension-stored position
+    let savedScrollLeft = previousState.scrollLeft ?? (extScrollLeft > 0 ? extScrollLeft : null);
+    let savedScrollTop = previousState.scrollTop ?? (extScrollTop > 0 ? extScrollTop : null);
     let savedCenterDateMs = previousState.centerDateMs;
 
     // Convert scroll position to center date (milliseconds)
@@ -1177,6 +1595,7 @@ export class GanttPanel {
     // - Vertical: labels <-> timeline body
     // - Horizontal: timeline header <-> timeline body
     let scrollSyncing = false;
+    let scrollReportTimeout = null;
     if (labelsColumn && timelineColumn && timelineHeader) {
       timelineColumn.addEventListener('scroll', () => {
         if (scrollSyncing) return;
@@ -1185,18 +1604,67 @@ export class GanttPanel {
         labelsColumn.scrollTop = timelineColumn.scrollTop;
         // Sync horizontal with header
         timelineHeader.scrollLeft = timelineColumn.scrollLeft;
-        scrollSyncing = false;
+        // Report scroll position to extension (debounced)
+        clearTimeout(scrollReportTimeout);
+        scrollReportTimeout = setTimeout(() => {
+          vscode.postMessage({
+            command: 'scrollPosition',
+            left: timelineColumn.scrollLeft,
+            top: timelineColumn.scrollTop
+          });
+        }, 100);
+        // Delay reset to prevent cascade from synced scroll events
+        requestAnimationFrame(() => { scrollSyncing = false; });
       });
       labelsColumn.addEventListener('scroll', () => {
         if (scrollSyncing) return;
         scrollSyncing = true;
         timelineColumn.scrollTop = labelsColumn.scrollTop;
-        scrollSyncing = false;
+        requestAnimationFrame(() => { scrollSyncing = false; });
       });
     }
 
     // Initial button state
     updateUndoRedoButtons();
+
+    // Handle messages from extension (for state updates without full re-render)
+    addWinListener('message', event => {
+      const message = event.data;
+      if (message.command === 'setHeatmapState') {
+        const heatmapLayer = document.querySelector('.heatmap-layer');
+        const weekendLayer = document.querySelector('.weekend-layer');
+        const heatmapBtn = document.getElementById('heatmapBtn');
+        const heatmapLegend = document.querySelector('.heatmap-legend');
+
+        if (message.enabled) {
+          if (heatmapLayer) heatmapLayer.style.display = '';
+          if (weekendLayer) weekendLayer.style.display = 'none';
+          if (heatmapBtn) heatmapBtn.classList.add('active');
+          if (heatmapLegend) heatmapLegend.style.display = '';
+        } else {
+          if (heatmapLayer) heatmapLayer.style.display = 'none';
+          if (weekendLayer) weekendLayer.style.display = '';
+          if (heatmapBtn) heatmapBtn.classList.remove('active');
+          if (heatmapLegend) heatmapLegend.style.display = 'none';
+        }
+      } else if (message.command === 'pushUndoAction') {
+        // Push relation action to undo stack
+        undoStack.push(message.action);
+        redoStack.length = 0;
+        updateUndoRedoButtons();
+        saveState();
+      } else if (message.command === 'updateRelationId') {
+        // Update relationId in most recent relation action (after undo/redo recreates relation)
+        const stack = message.stack === 'undo' ? undoStack : redoStack;
+        if (stack.length > 0) {
+          const lastAction = stack[stack.length - 1];
+          if (lastAction.type === 'relation') {
+            lastAction.relationId = message.newRelationId;
+            saveState();
+          }
+        }
+      }
+    });
 
     // Zoom toggle handlers - use saveStateForZoom to preserve center date
     document.getElementById('zoomDay').addEventListener('click', () => {
@@ -1226,6 +1694,59 @@ export class GanttPanel {
       vscode.postMessage({ command: 'toggleWorkloadHeatmap' });
     });
 
+    // Refresh button handler
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      vscode.postMessage({ command: 'refresh' });
+    });
+
+    // Show delete confirmation picker
+    function showDeletePicker(x, y, relationId, fromId, toId) {
+      document.querySelector('.relation-picker')?.remove();
+
+      const picker = document.createElement('div');
+      picker.className = 'relation-picker';
+
+      // Clamp position to viewport bounds
+      const pickerWidth = 150;
+      const pickerHeight = 100;
+      const clampedX = Math.min(x, window.innerWidth - pickerWidth - 10);
+      const clampedY = Math.min(y, window.innerHeight - pickerHeight - 10);
+      picker.style.left = Math.max(10, clampedX) + 'px';
+      picker.style.top = Math.max(10, clampedY) + 'px';
+
+      const label = document.createElement('div');
+      label.style.padding = '6px 12px';
+      label.style.fontSize = '11px';
+      label.style.opacity = '0.7';
+      label.textContent = \`#\${fromId} → #\${toId}\`;
+      picker.appendChild(label);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = '🗑️ Delete relation';
+      deleteBtn.addEventListener('click', () => {
+        saveState();
+        vscode.postMessage({ command: 'deleteRelation', relationId });
+        picker.remove();
+      });
+      picker.appendChild(deleteBtn);
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', () => picker.remove());
+      picker.appendChild(cancelBtn);
+
+      document.body.appendChild(picker);
+
+      setTimeout(() => {
+        document.addEventListener('click', function closeHandler(e) {
+          if (!picker.contains(e.target)) {
+            picker.remove();
+            document.removeEventListener('click', closeHandler);
+          }
+        });
+      }, 0);
+    }
+
     // Right-click on dependency arrow to delete
     document.querySelectorAll('.dependency-arrow').forEach(arrow => {
       arrow.addEventListener('contextmenu', (e) => {
@@ -1233,10 +1754,7 @@ export class GanttPanel {
         const relationId = parseInt(arrow.dataset.relationId);
         const fromId = arrow.dataset.from;
         const toId = arrow.dataset.to;
-        if (confirm('Delete relation from #' + fromId + ' to #' + toId + '?')) {
-          saveState();
-          vscode.postMessage({ command: 'deleteRelation', relationId });
-        }
+        showDeletePicker(e.clientX, e.clientY, relationId, fromId, toId);
       });
     });
 
@@ -1285,127 +1803,284 @@ export class GanttPanel {
       });
     });
 
-    // Handle click on bar (open issue) - only if not dragging
-    document.querySelectorAll('.issue-bar .bar-main').forEach(bar => {
+    // Linking drag state
+    let linkingState = null;
+    let tempArrow = null;
+    let currentTarget = null;
+
+    function cancelLinking() {
+      if (!linkingState) return;
+      linkingState.fromBar.classList.remove('linking-source');
+      document.querySelectorAll('.link-target').forEach(el => el.classList.remove('link-target'));
+      if (tempArrow) { tempArrow.remove(); tempArrow = null; }
+      linkingState = null;
+      currentTarget = null;
+      document.body.style.cursor = '';
+    }
+
+    function showRelationPicker(x, y, fromId, toId) {
+      // Remove existing picker
+      document.querySelector('.relation-picker')?.remove();
+
+      const picker = document.createElement('div');
+      picker.className = 'relation-picker';
+
+      // Clamp position to viewport bounds (picker is ~180px wide, ~200px tall)
+      const pickerWidth = 180;
+      const pickerHeight = 200;
+      const clampedX = Math.min(x, window.innerWidth - pickerWidth - 10);
+      const clampedY = Math.min(y, window.innerHeight - pickerHeight - 10);
+      picker.style.left = Math.max(10, clampedX) + 'px';
+      picker.style.top = Math.max(10, clampedY) + 'px';
+
+      const types = [
+        { value: 'blocks', label: '🚫 Blocks', color: '#e74c3c',
+          tooltip: 'Target cannot be closed until this issue is closed' },
+        { value: 'precedes', label: '➡️ Precedes', color: '#9b59b6',
+          tooltip: 'This issue must complete before target can start' },
+        { value: 'relates', label: '🔗 Relates to', color: '#7f8c8d',
+          tooltip: 'Simple link between issues (no constraints)' },
+        { value: 'duplicates', label: '📋 Duplicates', color: '#e67e22',
+          tooltip: 'Closing target will automatically close this issue' },
+        { value: 'copied_to', label: '📄 Copied to', color: '#1abc9c',
+          tooltip: 'This issue was copied to create the target issue' }
+      ];
+
+      types.forEach(t => {
+        const btn = document.createElement('button');
+        btn.innerHTML = '<span style="display:inline-block;width:12px;height:3px;background:' + t.color + ';margin-right:8px;vertical-align:middle;"></span>' + t.label;
+        btn.title = t.tooltip;
+        btn.addEventListener('click', () => {
+          saveState();
+          vscode.postMessage({
+            command: 'createRelation',
+            issueId: fromId,
+            targetIssueId: toId,
+            relationType: t.value
+          });
+          picker.remove();
+        });
+        picker.appendChild(btn);
+      });
+
+      document.body.appendChild(picker);
+
+      // Close on outside click
+      setTimeout(() => {
+        document.addEventListener('click', function closeHandler(e) {
+          if (!picker.contains(e.target)) {
+            picker.remove();
+            document.removeEventListener('click', closeHandler);
+          }
+        });
+      }, 0);
+    }
+
+    // Announce to screen readers
+    function announce(message) {
+      const liveRegion = document.getElementById('liveRegion');
+      if (liveRegion) {
+        liveRegion.textContent = message;
+      }
+    }
+
+    // Handle click on bar (open issue) - attach to entire issue-bar group
+    document.querySelectorAll('.issue-bar').forEach(bar => {
       bar.addEventListener('click', (e) => {
-        if (dragState) return;
-        const issueId = parseInt(bar.closest('.issue-bar').dataset.issueId);
+        // Ignore if clicking on drag handles or link handle
+        const target = e.target;
+        if (target.classList.contains('drag-handle') ||
+            target.classList.contains('drag-left') ||
+            target.classList.contains('drag-right') ||
+            target.classList.contains('link-handle')) {
+          return;
+        }
+        if (dragState || linkingState) return;
+        const issueId = parseInt(bar.dataset.issueId);
         vscode.postMessage({ command: 'openIssue', issueId });
       });
     });
 
-    // Linking mode state
-    let linkingState = null;
-
-    // Alt+click on bar to start linking mode
-    document.querySelectorAll('.issue-bar .bar-main').forEach(bar => {
-      bar.addEventListener('click', (e) => {
-        if (!e.altKey) return;
-        e.stopPropagation();
-        const issueBar = bar.closest('.issue-bar');
-        const issueId = parseInt(issueBar.dataset.issueId);
-
-        if (!linkingState) {
-          // Start linking mode
-          linkingState = { fromId: issueId, fromBar: issueBar };
-          issueBar.classList.add('linking-source');
-          document.body.style.cursor = 'crosshair';
-        } else if (linkingState.fromId !== issueId) {
-          // Complete link to different issue
-          const relationType = prompt('Relation type: (b)locks, (p)recedes, or (f)ollows?', 'b');
-          if (relationType) {
-            const input = relationType.toLowerCase();
-            const type = input.startsWith('p') ? 'precedes' : input.startsWith('f') ? 'follows' : 'blocks';
-            saveState();
-            vscode.postMessage({
-              command: 'createRelation',
-              issueId: linkingState.fromId,
-              targetIssueId: issueId,
-              relationType: type
-            });
-          }
-          linkingState.fromBar.classList.remove('linking-source');
-          linkingState = null;
-          document.body.style.cursor = '';
+    // Keyboard navigation for issue bars
+    const issueBars = Array.from(document.querySelectorAll('.issue-bar'));
+    issueBars.forEach((bar, index) => {
+      bar.addEventListener('keydown', (e) => {
+        const issueId = parseInt(bar.dataset.issueId);
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          vscode.postMessage({ command: 'openIssue', issueId });
+        } else if (e.key === 'ArrowDown' && index < issueBars.length - 1) {
+          e.preventDefault();
+          issueBars[index + 1].focus();
+          announce(\`Issue \${issueBars[index + 1].getAttribute('aria-label')}\`);
+        } else if (e.key === 'ArrowUp' && index > 0) {
+          e.preventDefault();
+          issueBars[index - 1].focus();
+          announce(\`Issue \${issueBars[index - 1].getAttribute('aria-label')}\`);
         }
       });
     });
 
-    // Escape to cancel linking mode
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && linkingState) {
-        linkingState.fromBar.classList.remove('linking-source');
-        linkingState = null;
-        document.body.style.cursor = '';
+    // Handle link handle mousedown to start linking
+    document.querySelectorAll('.link-handle').forEach(handle => {
+      handle.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const bar = handle.closest('.issue-bar');
+        const issueId = parseInt(bar.dataset.issueId);
+        const cx = parseFloat(handle.getAttribute('cx'));
+        const cy = parseFloat(handle.getAttribute('cy'));
+
+        bar.classList.add('linking-source');
+        document.body.style.cursor = 'crosshair';
+
+        // Create temp arrow in SVG with arrowhead marker
+        const svg = document.querySelector('#ganttTimeline svg');
+
+        // Add arrowhead marker if not exists
+        if (!document.getElementById('temp-arrow-head')) {
+          const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+          defs.innerHTML = \`
+            <marker id="temp-arrow-head" markerWidth="10" markerHeight="7"
+                    refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--vscode-focusBorder)"/>
+            </marker>\`;
+          svg.insertBefore(defs, svg.firstChild);
+        }
+
+        tempArrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        tempArrow.classList.add('temp-link-arrow');
+        tempArrow.setAttribute('stroke', 'var(--vscode-focusBorder)');
+        tempArrow.setAttribute('stroke-width', '2');
+        tempArrow.setAttribute('fill', 'none');
+        tempArrow.setAttribute('marker-end', 'url(#temp-arrow-head)');
+        svg.appendChild(tempArrow);
+
+        linkingState = { fromId: issueId, fromBar: bar, startX: cx, startY: cy };
+      });
+    });
+
+    // Escape to cancel linking mode and close pickers
+    addDocListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (linkingState) {
+          cancelLinking();
+        }
+        // Close any open picker
+        document.querySelector('.relation-picker')?.remove();
       }
     });
 
-    // Labels click
+    // Labels click and keyboard
     document.querySelectorAll('.issue-label').forEach(el => {
       el.addEventListener('click', () => {
         const issueId = parseInt(el.dataset.issueId);
         vscode.postMessage({ command: 'openIssue', issueId });
       });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const issueId = parseInt(el.dataset.issueId);
+          vscode.postMessage({ command: 'openIssue', issueId });
+        }
+      });
     });
 
-    // Handle drag move
-    document.addEventListener('mousemove', (e) => {
-      if (!dragState) return;
-      const delta = e.clientX - dragState.initialMouseX;
-      let newStartX = dragState.startX;
-      let newEndX = dragState.endX;
+    // Handle drag move (resizing and linking)
+    addDocListener('mousemove', (e) => {
+      // Handle resize drag
+      if (dragState) {
+        const delta = e.clientX - dragState.initialMouseX;
+        let newStartX = dragState.startX;
+        let newEndX = dragState.endX;
 
-      if (dragState.isLeft) {
-        // Snap to day boundary, ensure minimum bar width of 1 day
-        newStartX = snapToDay(Math.max(0, Math.min(dragState.startX + delta, dragState.endX - dayWidth)));
-      } else {
-        // Snap to day boundary, ensure minimum bar width of 1 day
-        newEndX = snapToDay(Math.max(dragState.startX + dayWidth, Math.min(dragState.endX + delta, timelineWidth)));
+        if (dragState.isLeft) {
+          newStartX = snapToDay(Math.max(0, Math.min(dragState.startX + delta, dragState.endX - dayWidth)));
+        } else {
+          newEndX = snapToDay(Math.max(dragState.startX + dayWidth, Math.min(dragState.endX + delta, timelineWidth)));
+        }
+
+        const width = newEndX - newStartX;
+        dragState.barOutline.setAttribute('x', newStartX);
+        dragState.barOutline.setAttribute('width', width);
+        if (dragState.barMain) {
+          dragState.barMain.setAttribute('x', newStartX);
+          dragState.barMain.setAttribute('width', width);
+        }
+        dragState.leftHandle.setAttribute('x', newStartX);
+        dragState.rightHandle.setAttribute('x', newEndX - 8);
+        dragState.newStartX = newStartX;
+        dragState.newEndX = newEndX;
       }
 
-      // Update visual - use barOutline (always exists), and barMain if it exists
-      const width = newEndX - newStartX;
-      dragState.barOutline.setAttribute('x', newStartX);
-      dragState.barOutline.setAttribute('width', width);
-      if (dragState.barMain) {
-        dragState.barMain.setAttribute('x', newStartX);
-        dragState.barMain.setAttribute('width', width);
-      }
-      dragState.leftHandle.setAttribute('x', newStartX);
-      dragState.rightHandle.setAttribute('x', newEndX - 8);
-      dragState.newStartX = newStartX;
-      dragState.newEndX = newEndX;
-    });
+      // Handle linking drag
+      if (linkingState && tempArrow) {
+        // Use container rect + scroll to get SVG coordinates
+        const rect = timelineColumn.getBoundingClientRect();
+        const scrollLeft = timelineColumn.scrollLeft;
+        const scrollTop = timelineColumn.scrollTop;
+        const endX = e.clientX - rect.left + scrollLeft;
+        const endY = e.clientY - rect.top + scrollTop;
 
-    // Handle drag end
-    document.addEventListener('mouseup', () => {
-      if (!dragState) return;
-      const { issueId, isLeft, newStartX, newEndX, bar, startX, endX, oldStartDate, oldDueDate } = dragState;
-      bar.classList.remove('dragging');
+        // Draw dashed line from start to cursor
+        const path = \`M \${linkingState.startX} \${linkingState.startY} L \${endX} \${endY}\`;
+        tempArrow.setAttribute('d', path);
 
-      // Only update if date actually changed (not just pixels)
-      if (newStartX !== undefined || newEndX !== undefined) {
-        const calcStartDate = isLeft && newStartX !== startX ? xToDate(newStartX) : null;
-        const calcDueDate = !isLeft && newEndX !== endX ? xToDate(newEndX) : null;
-        // Skip if date is same as original
-        const newStartDate = calcStartDate && calcStartDate !== oldStartDate ? calcStartDate : null;
-        const newDueDate = calcDueDate && calcDueDate !== oldDueDate ? calcDueDate : null;
-
-        if (newStartDate || newDueDate) {
-          // Push to undo stack before making change
-          undoStack.push({
-            issueId,
-            oldStartDate: newStartDate ? oldStartDate : null,
-            oldDueDate: newDueDate ? oldDueDate : null,
-            newStartDate,
-            newDueDate
-          });
-          redoStack.length = 0; // Clear redo stack on new action
-          updateUndoRedoButtons();
-          vscode.postMessage({ command: 'updateDates', issueId, startDate: newStartDate, dueDate: newDueDate });
+        // Find target bar under cursor
+        const targetBar = document.elementFromPoint(e.clientX, e.clientY)?.closest('.issue-bar');
+        if (currentTarget && currentTarget !== targetBar) {
+          currentTarget.classList.remove('link-target');
+        }
+        if (targetBar && targetBar !== linkingState.fromBar) {
+          targetBar.classList.add('link-target');
+          currentTarget = targetBar;
+        } else {
+          currentTarget = null;
         }
       }
-      dragState = null;
+    });
+
+    // Handle drag end (resizing and linking)
+    addDocListener('mouseup', (e) => {
+      // Handle resize drag end
+      if (dragState) {
+        const { issueId, isLeft, newStartX, newEndX, bar, startX, endX, oldStartDate, oldDueDate } = dragState;
+        bar.classList.remove('dragging');
+
+        if (newStartX !== undefined || newEndX !== undefined) {
+          const calcStartDate = isLeft && newStartX !== startX ? xToDate(newStartX) : null;
+          const calcDueDate = !isLeft && newEndX !== endX ? xToDate(newEndX) : null;
+          const newStartDate = calcStartDate && calcStartDate !== oldStartDate ? calcStartDate : null;
+          const newDueDate = calcDueDate && calcDueDate !== oldDueDate ? calcDueDate : null;
+
+          if (newStartDate || newDueDate) {
+            undoStack.push({
+              issueId,
+              oldStartDate: newStartDate ? oldStartDate : null,
+              oldDueDate: newDueDate ? oldDueDate : null,
+              newStartDate,
+              newDueDate
+            });
+            redoStack.length = 0;
+            updateUndoRedoButtons();
+            vscode.postMessage({ command: 'updateDates', issueId, startDate: newStartDate, dueDate: newDueDate });
+          }
+        }
+        dragState = null;
+      }
+
+      // Handle linking drag end
+      if (linkingState) {
+        const fromId = linkingState.fromId;
+        if (currentTarget) {
+          const toId = parseInt(currentTarget.dataset.issueId);
+          // Prevent self-referential relations
+          if (fromId !== toId) {
+            showRelationPicker(e.clientX, e.clientY, fromId, toId);
+          }
+        }
+        cancelLinking();
+      }
     });
 
     // Undo button
@@ -1414,12 +2089,37 @@ export class GanttPanel {
       const action = undoStack.pop();
       redoStack.push(action);
       updateUndoRedoButtons();
-      vscode.postMessage({
-        command: 'updateDates',
-        issueId: action.issueId,
-        startDate: action.oldStartDate,
-        dueDate: action.oldDueDate
-      });
+      saveState();
+
+      if (action.type === 'relation') {
+        // Undo relation action
+        if (action.operation === 'create') {
+          // Undo create = delete the relation
+          vscode.postMessage({
+            command: 'undoRelation',
+            operation: 'delete',
+            relationId: action.relationId,
+            datesBefore: action.datesBefore
+          });
+        } else {
+          // Undo delete = recreate the relation
+          vscode.postMessage({
+            command: 'undoRelation',
+            operation: 'create',
+            issueId: action.issueId,
+            targetIssueId: action.targetIssueId,
+            relationType: action.relationType
+          });
+        }
+      } else {
+        // Date change action
+        vscode.postMessage({
+          command: 'updateDates',
+          issueId: action.issueId,
+          startDate: action.oldStartDate,
+          dueDate: action.oldDueDate
+        });
+      }
     });
 
     // Redo button
@@ -1428,16 +2128,40 @@ export class GanttPanel {
       const action = redoStack.pop();
       undoStack.push(action);
       updateUndoRedoButtons();
-      vscode.postMessage({
-        command: 'updateDates',
-        issueId: action.issueId,
-        startDate: action.newStartDate,
-        dueDate: action.newDueDate
-      });
+      saveState();
+
+      if (action.type === 'relation') {
+        // Redo relation action
+        if (action.operation === 'create') {
+          // Redo create = recreate the relation
+          vscode.postMessage({
+            command: 'redoRelation',
+            operation: 'create',
+            issueId: action.issueId,
+            targetIssueId: action.targetIssueId,
+            relationType: action.relationType
+          });
+        } else {
+          // Redo delete = delete the relation again
+          vscode.postMessage({
+            command: 'redoRelation',
+            operation: 'delete',
+            relationId: action.relationId
+          });
+        }
+      } else {
+        // Date change action
+        vscode.postMessage({
+          command: 'updateDates',
+          issueId: action.issueId,
+          startDate: action.newStartDate,
+          dueDate: action.newDueDate
+        });
+      }
     });
 
     // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
+    addDocListener('keydown', (e) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const modKey = isMac ? e.metaKey : e.ctrlKey;
 
@@ -1468,7 +2192,7 @@ export class GanttPanel {
       scrollToCenterDate(savedCenterDateMs);
       if (savedScrollTop !== null) {
         timelineColumn.scrollTop = savedScrollTop;
-        labelsColumn.scrollTop = savedScrollTop;
+        if (labelsColumn) labelsColumn.scrollTop = savedScrollTop;
       }
       savedCenterDateMs = null;
       savedScrollTop = null;
@@ -1477,7 +2201,7 @@ export class GanttPanel {
       timelineColumn.scrollLeft = savedScrollLeft;
       if (savedScrollTop !== null) {
         timelineColumn.scrollTop = savedScrollTop;
-        labelsColumn.scrollTop = savedScrollTop;
+        if (labelsColumn) labelsColumn.scrollTop = savedScrollTop;
       }
       savedScrollLeft = null;
       savedScrollTop = null;
@@ -1504,14 +2228,14 @@ export class GanttPanel {
       e.preventDefault();
     });
 
-    document.addEventListener('mousemove', (e) => {
+    addDocListener('mousemove', (e) => {
       if (!isResizing) return;
       const delta = e.clientX - resizeStartX;
       const newWidth = Math.min(500, Math.max(150, resizeStartWidth + delta));
       ganttLeft.style.width = newWidth + 'px';
     });
 
-    document.addEventListener('mouseup', () => {
+    addDocListener('mouseup', () => {
       if (isResizing) {
         isResizing = false;
         resizeHandle.classList.remove('dragging');
@@ -1574,10 +2298,12 @@ export class GanttPanel {
     svgWidth: number,
     leftMargin: number,
     zoomLevel: ZoomLevel = "day",
-    workloadMap?: Map<string, number>
+    workloadMap: Map<string, number>,
+    showHeatmap: boolean
   ): { header: string; body: string } {
     const headerContent: string[] = [];
-    const bodyBackgrounds: string[] = [];
+    const heatmapBackgrounds: string[] = [];
+    const weekendBackgrounds: string[] = [];
     const bodyGridLines: string[] = [];
     const bodyMarkers: string[] = [];
     const current = new Date(minDate);
@@ -1600,27 +2326,25 @@ export class GanttPanel {
           (maxDate.getTime() - minDate.getTime())) *
           (svgWidth - leftMargin);
 
-      const dayOfWeek = current.getDay();
-      const dayOfMonth = current.getDate();
-      const month = current.getMonth();
-      const year = current.getFullYear();
+      const dayOfWeek = current.getUTCDay();
+      const dayOfMonth = current.getUTCDate();
+      const month = current.getUTCMonth();
+      const year = current.getUTCFullYear();
       const quarter = Math.floor(month / 3) + 1;
 
-      // Workload heatmap backgrounds (when enabled)
-      if (workloadMap) {
-        const dateKey = current.toISOString().slice(0, 10);
-        const utilization = workloadMap.get(dateKey) ?? 0;
-        const color = getHeatmapColor(utilization);
-        if (color !== "transparent") {
-          bodyBackgrounds.push(`
-            <rect x="${x}" y="0" width="${dayWidth}" height="100%" fill="${color}" opacity="0.15"/>
-          `);
-        }
+      // Always generate heatmap backgrounds (toggle via CSS)
+      const dateKey = current.toISOString().slice(0, 10);
+      const utilization = workloadMap.get(dateKey) ?? 0;
+      const color = getHeatmapColor(utilization);
+      if (color !== "transparent") {
+        heatmapBackgrounds.push(`
+          <rect x="${x}" y="0" width="${dayWidth}" height="100%" fill="${color}" opacity="0.15"/>
+        `);
       }
 
-      // Weekend backgrounds (show for day/week zoom when heatmap not active)
-      if (!workloadMap && (zoomLevel === "day" || zoomLevel === "week") && (dayOfWeek === 0 || dayOfWeek === 6)) {
-        bodyBackgrounds.push(`
+      // Always generate weekend backgrounds for day/week zoom (toggle via CSS)
+      if ((zoomLevel === "day" || zoomLevel === "week") && (dayOfWeek === 0 || dayOfWeek === 6)) {
+        weekendBackgrounds.push(`
           <rect x="${x}" y="0" width="${dayWidth}" height="100%" class="weekend-bg"/>
         `);
       }
@@ -1674,11 +2398,11 @@ export class GanttPanel {
       if ((zoomLevel === "day" || zoomLevel === "week" || zoomLevel === "month") && dayOfWeek === 1) {
         const weekNum = getWeekNumber(current);
         const weekEnd = new Date(current);
-        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
         const startDay = dayOfMonth;
-        const startMonth = current.toLocaleString("en", { month: "short" });
-        const endDay = weekEnd.getDate();
-        const endMonth = weekEnd.toLocaleString("en", { month: "short" });
+        const startMonth = current.toLocaleString("en", { month: "short", timeZone: "UTC" });
+        const endDay = weekEnd.getUTCDate();
+        const endMonth = weekEnd.toLocaleString("en", { month: "short", timeZone: "UTC" });
         const dateRange = startMonth === endMonth
           ? `${startDay}-${endDay} ${endMonth}`
           : `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
@@ -1732,12 +2456,16 @@ export class GanttPanel {
         `);
       }
 
-      current.setDate(current.getDate() + 1);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
+
+    // Wrap backgrounds in groups for CSS-based visibility toggle
+    const heatmapGroup = `<g class="heatmap-layer" style="${showHeatmap ? "" : "display: none;"}">${heatmapBackgrounds.join("")}</g>`;
+    const weekendGroup = `<g class="weekend-layer" style="${showHeatmap ? "display: none;" : ""}">${weekendBackgrounds.join("")}</g>`;
 
     return {
       header: headerContent.join(""),
-      body: bodyBackgrounds.join("") + bodyGridLines.join("") + bodyMarkers.join(""),
+      body: heatmapGroup + weekendGroup + bodyGridLines.join("") + bodyMarkers.join(""),
     };
   }
 }

@@ -19,7 +19,7 @@ import { setApiKey } from "./commands/set-api-key";
 import { calculateWorkload } from "./utilities/workload-calculator";
 import { WeeklySchedule } from "./utilities/flexibility-calculator";
 import { GanttPanel } from "./webviews/gantt-panel";
-import { disposeStatusBar } from "./utilities/status-bar";
+import { disposeStatusBar, showStatusBarMessage } from "./utilities/status-bar";
 
 // Constants
 const CONFIG_DEBOUNCE_MS = 300;
@@ -96,8 +96,8 @@ export function activate(context: vscode.ExtensionContext): void {
     // Create status bar if not exists
     if (!cleanupResources.workloadStatusBar) {
       cleanupResources.workloadStatusBar = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right,
-        100
+        vscode.StatusBarAlignment.Left,
+        50 // Lower priority to not compete with core features
       );
       cleanupResources.workloadStatusBar.command = "redmine.listOpenIssuesAssignedToMe";
       context.subscriptions.push(cleanupResources.workloadStatusBar);
@@ -389,9 +389,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // Update context and refresh trees
       await updateConfiguredContext();
 
-      vscode.window.showInformationMessage(
-        "Redmine configured successfully!"
-      );
+      showStatusBarMessage("$(check) Redmine configured", 3000);
     })
   );
 
@@ -485,7 +483,7 @@ export function activate(context: vscode.ExtensionContext): void {
   vscode.commands.executeCommand(
     "setContext",
     "redmine:treeViewStyle",
-    ProjectsViewStyle.LIST
+    ProjectsViewStyle.TREE
   );
 
   const parseConfiguration = async (
@@ -675,7 +673,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }
     const url = `${props.server.options.address}/issues/${issue.id}`;
     await vscode.env.clipboard.writeText(url);
-    vscode.window.showInformationMessage(`Copied URL for issue #${issue.id}`);
+    showStatusBarMessage(`$(check) Copied #${issue.id} URL`, 2000);
   });
   // Debounce refresh to prevent rapid-fire API calls
   let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -711,7 +709,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("redmine.clearApiOutput", () => {
       outputChannel.clear();
-      vscode.window.showInformationMessage("Redmine API output cleared");
+      showStatusBarMessage("$(check) API output cleared", 2000);
     }),
     vscode.commands.registerCommand("redmine.toggleApiLogging", async () => {
       const config = vscode.workspace.getConfiguration("redmine");
@@ -721,8 +719,9 @@ export function activate(context: vscode.ExtensionContext): void {
         !currentValue,
         vscode.ConfigurationTarget.Global
       );
-      vscode.window.showInformationMessage(
-        `Redmine API logging ${!currentValue ? "enabled" : "disabled"}`
+      showStatusBarMessage(
+        `$(check) API logging ${!currentValue ? "enabled" : "disabled"}`,
+        2000
       );
       // Refresh trees to use new server instances
       await updateConfiguredContext();
@@ -985,6 +984,25 @@ export function activate(context: vscode.ExtensionContext): void {
       });
 
       const panel = GanttPanel.createOrShow(projectsTree.server);
+      panel.updateIssues(issues, projectsTree.getFlexibilityCache(), schedule);
+    }),
+
+    // Refresh Gantt data without resetting view state
+    vscode.commands.registerCommand("redmine.refreshGanttData", async () => {
+      const panel = GanttPanel.currentPanel;
+      if (!panel) return;
+
+      // Clear cache and re-fetch
+      projectsTree.clearProjects();
+      const issues = await projectsTree.fetchIssuesIfNeeded();
+
+      if (issues.length === 0) return;
+
+      const scheduleConfig = vscode.workspace.getConfiguration("redmine.workingHours");
+      const schedule = scheduleConfig.get<WeeklySchedule>("weeklySchedule", {
+        Mon: 8, Tue: 8, Wed: 8, Thu: 8, Fri: 8, Sat: 0, Sun: 0,
+      });
+
       panel.updateIssues(issues, projectsTree.getFlexibilityCache(), schedule);
     })
   );

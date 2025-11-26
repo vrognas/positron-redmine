@@ -4,14 +4,45 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ## [Unreleased]
 
+### Added
+
+- **Drag-to-link relations** in Gantt chart - drag from link handle on bar to another bar
+  - Visual feedback: arrow with arrowhead follows cursor, target highlights
+  - Inline picker for all 6 Redmine relation types with tooltips
+- **Improved relation arrows** (GitLens-inspired):
+  - Smooth bezier curves instead of elbow paths
+  - Distinct colors per type: blocks (red), precedes (purple), follows (blue), relates (gray dashed), duplicates (orange dotted), copied (teal dashed)
+  - Smart routing to avoid bar overlap
+  - Legend showing all relation types and colors
+  - Detailed tooltips explaining each relation's behavior
+- **Past-portion texture** - Redmine-style diagonal red stripes show elapsed time on bars
+- **Past bars dimmed** - issues with due date before today are desaturated
+- **Parent issues as summaries** - bracket-style bars, no drag (dates derived from subtasks)
+- **Progress bars** - done_ratio shown as fill on Gantt bars
+- **View History** - see issue updates/comments via "View history" action
+- **Relation removal** - right-click dependency arrows to delete, with hover effect
+- **Gantt accessibility** - keyboard navigation (Arrow Up/Down, Enter), focus indicators, ARIA labels
+- **Interactive walkthrough** - 4-step onboarding guide (configure, view issues, log time, timeline)
+
 ### Security
 
 - **BREAKING**: HTTPS now required - HTTP URLs rejected
 - **BREAKING**: TLS certificate validation always enabled
 - Removed `rejectUnauthorized` setting (was insecure default)
 
+### Changed
+
+- **View renamed**: "Projects" → "My Issues" (better describes content)
+- **Default view style**: Tree view (was list) - groups issues by project hierarchy
+- **Parent project highlighting**: Projects with subproject issues are now highlighted
+- **Category**: "Other" → "Project Management" for marketplace
+- **Command prefixes**: Toggle commands now use "Redmine:" prefix
+- **Status bar**: Workload now on left side (workspace status)
+- **Notifications**: Success messages use status bar instead of popups
+
 ### Fixed
 
+- **Time logging activity validation** - uses project-specific activities when configured
 - Silent error catch in IssueController.listActions() now shows errors
 - Unsafe `reason as string` casts replaced with `errorToString()`
 - HTTP requests now timeout after 30s (prevents indefinite hangs)

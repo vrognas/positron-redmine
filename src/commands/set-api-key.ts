@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { RedmineSecretManager } from "../utilities/secret-manager";
+import { showStatusBarMessage } from "../utilities/status-bar";
 
 export async function setApiKey(
   context: vscode.ExtensionContext
@@ -32,7 +33,5 @@ export async function setApiKey(
   if (!apiKey) return;
 
   await secretManager.setApiKey(folder.uri, apiKey);
-  vscode.window.showInformationMessage(
-    `API key for ${folder.name} stored securely`
-  );
+  showStatusBarMessage("$(check) API key stored securely", 2000);
 }
