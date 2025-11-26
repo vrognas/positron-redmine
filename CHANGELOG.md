@@ -36,6 +36,7 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ### Fixed
 
+- **Time logging activity validation** - uses project-specific activities when configured
 - Silent error catch in IssueController.listActions() now shows errors
 - Unsafe `reason as string` casts replaced with `errorToString()`
 - HTTP requests now timeout after 30s (prevents indefinite hangs)

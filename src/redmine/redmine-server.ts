@@ -344,6 +344,34 @@ export class RedmineServer {
     };
   }
 
+  /**
+   * Get activities for a specific project (Redmine 3.4.0+)
+   * Projects can restrict which activities are available
+   * Falls back to global activities if project has no restrictions
+   */
+  async getProjectTimeEntryActivities(
+    projectId: number | string
+  ): Promise<TimeEntryActivity[]> {
+    try {
+      const response = await this.doRequest<{
+        project: {
+          time_entry_activities?: TimeEntryActivity[];
+        };
+      }>(`/projects/${projectId}.json?include=time_entry_activities`, "GET");
+
+      const projectActivities = response?.project?.time_entry_activities;
+      if (projectActivities && projectActivities.length > 0) {
+        return projectActivities;
+      }
+    } catch {
+      // Project-specific activities not available, fall through to global
+    }
+
+    // Fallback to global activities
+    const global = await this.getTimeEntryActivities();
+    return global.time_entry_activities;
+  }
+
   addTimeEntry(
     issueId: number,
     activityId: number,

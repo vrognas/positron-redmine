@@ -123,8 +123,11 @@ export class IssueController {
   }
 
   private async addTimeEntry() {
-    const activities = await this.redmine.getTimeEntryActivities();
-    this.chooseTimeEntryType(activities.time_entry_activities);
+    // Use project-specific activities (falls back to global if not restricted)
+    const activities = await this.redmine.getProjectTimeEntryActivities(
+      this.issue.project.id
+    );
+    this.chooseTimeEntryType(activities);
   }
 
   private async quickUpdate() {

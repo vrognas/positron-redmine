@@ -7,6 +7,7 @@ describe("quickLogTime", () => {
   let mockServer: {
     getIssuesAssignedToMe: ReturnType<typeof vi.fn>;
     getTimeEntryActivities: ReturnType<typeof vi.fn>;
+    getProjectTimeEntryActivities: ReturnType<typeof vi.fn>;
     getTimeEntries: ReturnType<typeof vi.fn>;
     addTimeEntry: ReturnType<typeof vi.fn>;
   };
@@ -26,7 +27,7 @@ describe("quickLogTime", () => {
           {
             id: 123,
             subject: "Test Issue",
-            project: { name: "Test Project" },
+            project: { id: 1, name: "Test Project" },
             status: { name: "In Progress" },
             due_date: "2025-12-01",
           },
@@ -37,6 +38,9 @@ describe("quickLogTime", () => {
           { id: 9, name: "Development", is_default: true },
         ],
       }),
+      getProjectTimeEntryActivities: vi.fn().mockResolvedValue([
+        { id: 9, name: "Development", is_default: true },
+      ]),
       getTimeEntries: vi.fn().mockResolvedValue({
         time_entries: [], // Default: no existing entries
       }),
@@ -89,7 +93,7 @@ describe("quickLogTime", () => {
     const testIssue = {
       id: 123,
       subject: "Test Issue",
-      project: { name: "Test Project" },
+      project: { id: 1, name: "Test Project" },
       status: { name: "In Progress" },
       due_date: "2025-12-01",
     };
@@ -155,7 +159,7 @@ describe("quickLogTime", () => {
     const testIssue = {
       id: 123,
       subject: "Test Issue",
-      project: { name: "Test Project" },
+      project: { id: 1, name: "Test Project" },
       status: { name: "In Progress" },
     };
 
@@ -209,7 +213,7 @@ describe("quickLogTime", () => {
         issue: {
           id: 123,
           subject: "Test Issue",
-          project: { name: "Test Project" },
+          project: { id: 1, name: "Test Project" },
           status: { name: "In Progress" },
         },
       } as unknown as vscode.QuickPickItem)
