@@ -964,52 +964,84 @@ export class GanttPanel {
           const target = issuePositions.get(rel.targetId);
           if (!source || !target) return "";
 
-          // Arrow from end of source bar to START of target bar
-          // This represents: "after source ends, target can start/proceed"
-          const x1 = source.endX + 2; // Small gap from source bar end
-          const y1 = source.y;
-          const x2 = target.startX - 2; // Always target's start (left edge)
-          const y2 = target.y;
-
           const style = relationStyles[rel.type] || relationStyles.relates;
           const arrowSize = 6;
+          const sameRow = Math.abs(source.y - target.y) < 5;
 
-          // Determine if we need to go right or route around (target overlaps/left of source)
-          const goingRight = x2 > x1;
-          const sameRow = Math.abs(y2 - y1) < 5;
+          // Find shortest path by comparing connection options
+          // Option A: source.end → target.start (natural flow, target to right)
+          // Option B: source.start → target.end (target to left, shorter path)
+          const distEndToStart = Math.abs(source.endX - target.startX);
+          const distStartToEnd = Math.abs(source.startX - target.endX);
 
-          // Calculate available horizontal space between source end and target start
-          const horizontalGap = x2 - x1;
+          // Determine if bars overlap horizontally
+          const barsOverlap = source.startX < target.endX && source.endX > target.startX;
 
+          let x1: number, y1: number, x2: number, y2: number;
+          let pointsRight: boolean;
           let path: string;
 
-          if (goingRight && sameRow) {
-            // Same row, target to right - straight line
-            path = `M ${x1} ${y1} L ${x2 - arrowSize} ${y2}`;
-          } else if (goingRight) {
-            // Target to the right, different row - elbow path
-            // Use dynamic gap: half the available space, but don't overshoot target
-            const maxElbow = Math.max(0, horizontalGap - arrowSize - 2);
-            const elbowGap = Math.min(maxElbow, Math.max(8, Math.min(20, horizontalGap / 2)));
+          if (barsOverlap) {
+            // Bars overlap - must route around vertically
+            // Use source.end → target.start with vertical routing
+            x1 = source.endX + 2;
+            y1 = source.y;
+            x2 = target.startX - 2;
+            y2 = target.y;
+            pointsRight = true;
 
-            if (elbowGap < 4) {
-              // Gap too small for elbow - use straight diagonal line
-              path = `M ${x1} ${y1} L ${x2 - arrowSize} ${y2}`;
-            } else {
-              const midX = x1 + elbowGap;
-              path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`;
-            }
-          } else {
-            // Target overlaps or is to the left - route around bars
             const gap = 12;
             const midX = x1 + gap;
             const routeY = y2 > y1 ? Math.max(y1, y2) + barHeight : Math.min(y1, y2) - barHeight;
-            // Route: right → vertical to clear → left past target → vertical to row → right to target.start
             path = `M ${x1} ${y1} H ${midX} V ${routeY} H ${x2 - gap} V ${y2} H ${x2 - arrowSize}`;
+          } else if (target.startX > source.endX) {
+            // Target is to the right - use end → start
+            x1 = source.endX + 2;
+            y1 = source.y;
+            x2 = target.startX - 2;
+            y2 = target.y;
+            pointsRight = true;
+
+            if (sameRow) {
+              path = `M ${x1} ${y1} L ${x2 - arrowSize} ${y2}`;
+            } else {
+              const horizontalGap = x2 - x1;
+              const maxElbow = Math.max(0, horizontalGap - arrowSize - 2);
+              const elbowGap = Math.min(maxElbow, Math.max(8, Math.min(20, horizontalGap / 2)));
+              if (elbowGap < 4) {
+                path = `M ${x1} ${y1} L ${x2 - arrowSize} ${y2}`;
+              } else {
+                const midX = x1 + elbowGap;
+                path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`;
+              }
+            }
+          } else {
+            // Target is to the left - use start → end (shortest path)
+            x1 = source.startX - 2;
+            y1 = source.y;
+            x2 = target.endX + 2;
+            y2 = target.y;
+            pointsRight = false;
+
+            if (sameRow) {
+              path = `M ${x1} ${y1} L ${x2 + arrowSize} ${y2}`;
+            } else {
+              const horizontalGap = x1 - x2;
+              const maxElbow = Math.max(0, horizontalGap - arrowSize - 2);
+              const elbowGap = Math.min(maxElbow, Math.max(8, Math.min(20, horizontalGap / 2)));
+              if (elbowGap < 4) {
+                path = `M ${x1} ${y1} L ${x2 + arrowSize} ${y2}`;
+              } else {
+                const midX = x1 - elbowGap;
+                path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 + arrowSize}`;
+              }
+            }
           }
 
-          // Arrowhead always points right (toward target.startX)
-          const arrowHead = `M ${x2} ${y2} l -${arrowSize} -${arrowSize * 0.6} l 0 ${arrowSize * 1.2} Z`;
+          // Arrowhead pointing in the direction of travel
+          const arrowHead = pointsRight
+            ? `M ${x2} ${y2} l -${arrowSize} -${arrowSize * 0.6} l 0 ${arrowSize * 1.2} Z`
+            : `M ${x2} ${y2} l ${arrowSize} -${arrowSize * 0.6} l 0 ${arrowSize * 1.2} Z`;
 
           const dashAttr = style.dash ? `stroke-dasharray="${style.dash}"` : "";
 
