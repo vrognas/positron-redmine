@@ -19,6 +19,14 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 - **BREAKING**: TLS certificate validation always enabled
 - Removed `rejectUnauthorized` setting (was insecure default)
 
+### Changed
+
+- **View renamed**: "Projects" → "My Issues" (better describes content)
+- **Category**: "Other" → "Project Management" for marketplace
+- **Command prefixes**: Toggle commands now use "Redmine:" prefix
+- **Status bar**: Workload now on left side (workspace status)
+- **Notifications**: Success messages use status bar instead of popups
+
 ### Fixed
 
 - Silent error catch in IssueController.listActions() now shows errors
