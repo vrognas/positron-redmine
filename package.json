@@ -111,6 +111,16 @@
       {
         "command": "redmine.createTestIssues",
         "title": "Redmine: Create Test Issues"
+      },
+      {
+        "command": "redmine.quickCreateIssue",
+        "title": "Redmine: Quick Create Issue",
+        "icon": "$(add)"
+      },
+      {
+        "command": "redmine.quickCreateSubIssue",
+        "title": "Create Sub-Issue",
+        "icon": "$(add)"
       }
     ],
     "keybindings": [
@@ -118,6 +128,12 @@
         "command": "redmine.quickLogTime",
         "key": "ctrl+y ctrl+y",
         "mac": "cmd+y cmd+y",
+        "when": "!terminalFocus && !inDebugMode && !inQuickOpen"
+      },
+      {
+        "command": "redmine.quickCreateIssue",
+        "key": "ctrl+y ctrl+n",
+        "mac": "cmd+y cmd+n",
         "when": "!terminalFocus && !inDebugMode && !inQuickOpen"
       }
     ],
@@ -188,6 +204,10 @@
         {
           "command": "redmine.copyIssueUrl",
           "when": "false"
+        },
+        {
+          "command": "redmine.quickCreateSubIssue",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -254,6 +274,11 @@
           "command": "redmine.copyIssueUrl",
           "when": "view == 'redmine-explorer-projects' && viewItem =~ /^issue/",
           "group": "9_cutcopypaste@1"
+        },
+        {
+          "command": "redmine.quickCreateSubIssue",
+          "when": "view == 'redmine-explorer-projects' && viewItem =~ /^issue/",
+          "group": "redmine@2"
         }
       ]
     },

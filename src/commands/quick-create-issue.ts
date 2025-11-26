@@ -47,11 +47,14 @@ export async function quickCreateIssue(
     // 1. Select project
     const projects = await props.server.getProjects();
     const projectPick = await vscode.window.showQuickPick(
-      projects.map((p) => ({
-        label: p.name,
-        identifier: p.identifier,
-        id: p.id,
-      })),
+      projects.map((p) => {
+        const item = p.toQuickPickItem();
+        return {
+          label: item.label,
+          description: item.description,
+          id: p.id,
+        };
+      }),
       {
         title: "Create Issue (1/6) - Project",
         placeHolder: "Select project",

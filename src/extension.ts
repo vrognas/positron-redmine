@@ -10,6 +10,7 @@ import openActionsForIssueUnderCursor from "./commands/open-actions-for-issue-un
 import listOpenIssuesAssignedToMe from "./commands/list-open-issues-assigned-to-me";
 import newIssue from "./commands/new-issue";
 import { quickLogTime } from "./commands/quick-log-time";
+import { quickCreateIssue, quickCreateSubIssue } from "./commands/quick-create-issue";
 import { RedmineConfig } from "./definitions/redmine-config";
 import { ActionProperties } from "./commands/action-properties";
 import { ProjectsTree, ProjectsViewStyle } from "./trees/projects-tree";
@@ -608,6 +609,41 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   registerCommand("newIssue", newIssue);
   registerCommand("quickLogTime", (props) => quickLogTime(props, context));
+  registerCommand("quickCreateIssue", async (props) => {
+    const created = await quickCreateIssue(props);
+    if (created) {
+      // Refresh issues to show newly created issue
+      projectsTree.clearProjects();
+      projectsTree.onDidChangeTreeData$.fire();
+    }
+  });
+  registerCommand("quickCreateSubIssue", async (props, ...args) => {
+    // Extract parent issue ID from tree node or command argument
+    let parentId: number | undefined;
+    if (args[0] && typeof args[0] === "object" && "id" in args[0]) {
+      parentId = (args[0] as { id: number }).id;
+    } else if (typeof args[0] === "number") {
+      parentId = args[0];
+    } else if (typeof args[0] === "string") {
+      parentId = parseInt(args[0], 10);
+    }
+
+    if (!parentId) {
+      const input = await vscode.window.showInputBox({
+        prompt: "Enter parent issue ID",
+        placeHolder: "e.g., 123",
+        validateInput: (v) => /^\d+$/.test(v) ? null : "Must be a number",
+      });
+      if (!input) return;
+      parentId = parseInt(input, 10);
+    }
+
+    const created = await quickCreateSubIssue(props, parentId);
+    if (created) {
+      projectsTree.clearProjects();
+      projectsTree.onDidChangeTreeData$.fire();
+    }
+  });
   registerCommand("changeDefaultServer", (conf) => {
     projectsTree.setServer(conf.server);
     myTimeEntriesTree.setServer(conf.server);
