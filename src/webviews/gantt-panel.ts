@@ -735,19 +735,29 @@ export class GanttPanel {
             })
             .join("");
 
-          // Generate line chart points (polyline)
-          const linePoints = intensities
-            .map((d, i) => {
-              const px = startX + (i + 0.5) * segmentWidth;
-              // Line Y: bottom of bar (y + barHeight) minus intensity * barHeight
-              const py = y + barHeight - Math.min(d.intensity, 1) * (barHeight - 4);
-              return `${px.toFixed(1)},${py.toFixed(1)}`;
-            })
-            .join(" ");
+          // Generate step function path (horizontal line per day, step at boundaries)
+          const stepPoints: string[] = [];
+          intensities.forEach((d, i) => {
+            const dayStartX = startX + i * segmentWidth;
+            const dayEndX = startX + (i + 1) * segmentWidth;
+            // Line Y: bottom of bar (y + barHeight) minus intensity * barHeight
+            const py = y + barHeight - Math.min(d.intensity, 1) * (barHeight - 4);
+            if (i === 0) {
+              // Move to start of first day
+              stepPoints.push(`M ${dayStartX.toFixed(1)},${py.toFixed(1)}`);
+            }
+            // Horizontal line across the day
+            stepPoints.push(`H ${dayEndX.toFixed(1)}`);
+            // Step to next day's height (if not last day)
+            if (i < intensities.length - 1) {
+              const nextPy = y + barHeight - Math.min(intensities[i + 1].intensity, 1) * (barHeight - 4);
+              stepPoints.push(`V ${nextPy.toFixed(1)}`);
+            }
+          });
 
-          intensityLine = `<polyline points="${linePoints}"
-                                     fill="none" stroke="var(--vscode-editor-foreground)"
-                                     stroke-width="1.5" opacity="0.7"/>`;
+          intensityLine = `<path d="${stepPoints.join(" ")}"
+                                 fill="none" stroke="var(--vscode-editor-foreground)"
+                                 stroke-width="1.5" opacity="0.7"/>`;
         }
 
         return `
