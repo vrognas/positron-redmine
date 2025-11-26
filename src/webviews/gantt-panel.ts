@@ -525,12 +525,8 @@ export class GanttPanel {
         });
         break;
       case "refresh":
-        // Clear cache and re-fetch fresh data for Gantt
-        vscode.commands.executeCommand("redmine.refreshIssues");
-        // Re-open Gantt with fresh data after cache clears
-        setTimeout(() => {
-          vscode.commands.executeCommand("redmine.showGantt");
-        }, 150);
+        // Refresh data without resetting view state
+        vscode.commands.executeCommand("redmine.refreshGanttData");
         break;
     }
   }
@@ -599,11 +595,8 @@ export class GanttPanel {
     try {
       await this._server.createRelation(issueId, targetIssueId, relationType);
       showStatusBarMessage(`$(check) ${labels[relationType]} relation created`, 2000);
-      // Refresh: clear cache and re-fetch for Gantt
-      vscode.commands.executeCommand("redmine.refreshIssues");
-      setTimeout(() => {
-        vscode.commands.executeCommand("redmine.showGantt");
-      }, 150);
+      // Refresh data without resetting view
+      vscode.commands.executeCommand("redmine.refreshGanttData");
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       // Map Redmine validation errors to user-friendly messages
@@ -964,45 +957,40 @@ export class GanttPanel {
           const target = issuePositions.get(rel.targetId);
           if (!source || !target) return "";
 
-          // Arrow from end of source bar to appropriate edge of target bar
+          // Arrow from end of source bar to START of target bar
+          // This represents: "after source ends, target can start/proceed"
           const x1 = source.endX + 2; // Small gap from source bar end
           const y1 = source.y;
+          const x2 = target.startX - 2; // Always target's start (left edge)
           const y2 = target.y;
 
           const style = relationStyles[rel.type] || relationStyles.relates;
           const arrowSize = 6;
           const gap = 12; // Horizontal gap before turning
 
-          // Determine direction: target to right or left of source?
-          const goingRight = target.startX > source.endX;
-          // Arrow points to left edge if going right, right edge if going left
-          const x2 = goingRight ? target.startX - 2 : target.endX + 2;
+          // Determine if we need to go right or route around (target overlaps/left of source)
+          const goingRight = x2 > x1;
 
           let path: string;
-          let arrowHeadX: number;
 
           if (goingRight && Math.abs(y2 - y1) < 5) {
             // Same row, target to right - straight line
             path = `M ${x1} ${y1} L ${x2 - arrowSize} ${y2}`;
-            arrowHeadX = x2;
           } else if (goingRight) {
             // Target to the right, different row - simple elbow
             const midX = x1 + gap;
             path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`;
-            arrowHeadX = x2;
           } else {
-            // Target to the left - route around: right, vertical, left to target's right edge
+            // Target overlaps or is to the left - route around
+            // Go right, then up/down to clear bars, then left to target.startX
             const midX = x1 + gap;
             const routeY = y2 > y1 ? Math.max(y1, y2) + barHeight : Math.min(y1, y2) - barHeight;
-            path = `M ${x1} ${y1} H ${midX} V ${routeY} H ${x2 + gap} V ${y2} H ${x2 + arrowSize}`;
-            arrowHeadX = x2;
+            // Route: right → vertical to clear → left past target → vertical to row → right to target.start
+            path = `M ${x1} ${y1} H ${midX} V ${routeY} H ${x2 - gap} V ${y2} H ${x2 - arrowSize}`;
           }
 
-          // Arrow head pointing in the right direction
-          const pointsRight = goingRight;
-          const arrowHead = pointsRight
-            ? `M ${arrowHeadX} ${y2} l -${arrowSize} -${arrowSize * 0.6} l 0 ${arrowSize * 1.2} Z`
-            : `M ${arrowHeadX} ${y2} l ${arrowSize} -${arrowSize * 0.6} l 0 ${arrowSize * 1.2} Z`;
+          // Arrowhead always points right (toward target.startX)
+          const arrowHead = `M ${x2} ${y2} l -${arrowSize} -${arrowSize * 0.6} l 0 ${arrowSize * 1.2} Z`;
 
           const dashAttr = style.dash ? `stroke-dasharray="${style.dash}"` : "";
 

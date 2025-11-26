@@ -985,6 +985,25 @@ export function activate(context: vscode.ExtensionContext): void {
 
       const panel = GanttPanel.createOrShow(projectsTree.server);
       panel.updateIssues(issues, projectsTree.getFlexibilityCache(), schedule);
+    }),
+
+    // Refresh Gantt data without resetting view state
+    vscode.commands.registerCommand("redmine.refreshGanttData", async () => {
+      const panel = GanttPanel.currentPanel;
+      if (!panel) return;
+
+      // Clear cache and re-fetch
+      projectsTree.clearProjects();
+      const issues = await projectsTree.fetchIssuesIfNeeded();
+
+      if (issues.length === 0) return;
+
+      const scheduleConfig = vscode.workspace.getConfiguration("redmine.workingHours");
+      const schedule = scheduleConfig.get<WeeklySchedule>("weeklySchedule", {
+        Mon: 8, Tue: 8, Wed: 8, Thu: 8, Fri: 8, Sat: 0, Sun: 0,
+      });
+
+      panel.updateIssues(issues, projectsTree.getFlexibilityCache(), schedule);
     })
   );
 }
