@@ -1184,6 +1184,7 @@ ${style.tip}
           `;
         })
       )
+      .filter(Boolean)
       .join("");
 
     // Always calculate aggregate workload (needed for heatmap toggle without re-render)
