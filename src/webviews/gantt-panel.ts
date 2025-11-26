@@ -1346,10 +1346,10 @@ export class GanttPanel {
         }
       }
 
-      // Week markers (for week/month zoom)
-      if ((zoomLevel === "week" || zoomLevel === "month") && dayOfWeek === 1) {
+      // Week markers (for day/week/month zoom)
+      if ((zoomLevel === "day" || zoomLevel === "week" || zoomLevel === "month") && dayOfWeek === 1) {
         const weekNum = getWeekNumber(current);
-        if (zoomLevel === "week") {
+        if (zoomLevel === "day" || zoomLevel === "week") {
           const weekEnd = new Date(current);
           weekEnd.setDate(weekEnd.getDate() + 6);
           const startDay = dayOfMonth;
@@ -1361,7 +1361,7 @@ export class GanttPanel {
             : `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
           headerContent.push(`
             <line x1="${x}" y1="0" x2="${x}" y2="40" class="date-marker"/>
-            <text x="${x + 4}" y="14" fill="var(--vscode-foreground)" font-size="11" font-weight="bold">W${weekNum} (${dateRange}), ${year}</text>
+            <text x="${x + 4}" y="14" fill="var(--vscode-foreground)" font-size="11" font-weight="bold">W${weekNum} (${dateRange}) ${year}</text>
           `);
         } else {
           // Month zoom - just show week number
@@ -1369,9 +1369,12 @@ export class GanttPanel {
             <text x="${x + 2}" y="30" fill="var(--vscode-descriptionForeground)" font-size="9">W${weekNum}</text>
           `);
         }
-        bodyGridLines.push(`
-          <line x1="${x}" y1="0" x2="${x}" y2="100%" class="day-grid"/>
-        `);
+        if (zoomLevel !== "day") {
+          // Day zoom has its own grid lines for each day
+          bodyGridLines.push(`
+            <line x1="${x}" y1="0" x2="${x}" y2="100%" class="day-grid"/>
+          `);
+        }
       }
 
       // Day markers (for day zoom - show ALL days)

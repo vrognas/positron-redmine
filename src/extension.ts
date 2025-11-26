@@ -19,6 +19,7 @@ import { setApiKey } from "./commands/set-api-key";
 import { calculateWorkload } from "./utilities/workload-calculator";
 import { WeeklySchedule } from "./utilities/flexibility-calculator";
 import { GanttPanel } from "./webviews/gantt-panel";
+import { disposeStatusBar } from "./utilities/status-bar";
 
 // Constants
 const CONFIG_DEBOUNCE_MS = 300;
@@ -31,6 +32,7 @@ let cleanupResources: {
   projectsTreeView?: vscode.TreeView<unknown>;
   myTimeEntriesTreeView?: vscode.TreeView<unknown>;
   workloadStatusBar?: vscode.StatusBarItem;
+  configChangeTimeout?: ReturnType<typeof setTimeout>;
   bucket?: {
     servers: RedmineServer[];
     projects: RedmineProject[];
@@ -220,20 +222,17 @@ export function activate(context: vscode.ExtensionContext): void {
   // Initial check
   updateConfiguredContext();
 
-  // Debounce config changes to avoid rapid-fire updates
-  let configChangeTimeout: ReturnType<typeof setTimeout> | null = null;
-
   // Listen for configuration changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("redmine")) return;
 
       // Clear pending timeout
-      if (configChangeTimeout) {
-        clearTimeout(configChangeTimeout);
+      if (cleanupResources.configChangeTimeout) {
+        clearTimeout(cleanupResources.configChangeTimeout);
       }
 
-      configChangeTimeout = setTimeout(async () => {
+      cleanupResources.configChangeTimeout = setTimeout(async () => {
         // Only update server context for server-related config changes
         // Skip for UI-only configs (statusBar, workingHours)
         if (
@@ -748,6 +747,11 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
+  // Clear pending config change timeout
+  if (cleanupResources.configChangeTimeout) {
+    clearTimeout(cleanupResources.configChangeTimeout);
+  }
+
   // Dispose EventEmitters in tree providers
   if (cleanupResources.projectsTree) {
     cleanupResources.projectsTree.onDidChangeTreeData$.dispose();
@@ -762,6 +766,9 @@ export function deactivate(): void {
   if (cleanupResources.workloadStatusBar) {
     cleanupResources.workloadStatusBar.dispose();
   }
+
+  // Dispose shared status bar utility
+  disposeStatusBar();
 
   // Dispose and clear bucket servers
   if (cleanupResources.bucket) {
