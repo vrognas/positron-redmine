@@ -133,7 +133,7 @@ function escapeHtml(str: string): string {
 function formatDateWithWeekday(dateStr: string | null): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
-  return `${dateStr} (${WEEKDAYS[d.getDay()]})`;
+  return `${dateStr} (${WEEKDAYS[d.getUTCDay()]})`;
 }
 
 /**
@@ -163,7 +163,7 @@ function formatHoursAsTime(hours: number | null): string {
  */
 function getDayKey(date: Date): keyof WeeklySchedule {
   const keys: (keyof WeeklySchedule)[] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return keys[date.getDay()];
+  return keys[date.getUTCDay()];
 }
 
 /**
@@ -725,11 +725,14 @@ export class GanttPanel {
           const segmentWidth = width / dayCount;
 
           // Generate day segments with varying opacity
+          // Scale intensity to 0-1 range where 1.5 (max stored) = full opacity
+          const maxIntensityForOpacity = 1.5;
           intensitySegments = intensities
             .map((d, i) => {
               const segX = startX + i * segmentWidth;
-              // Opacity: base 0.2 + intensity * 0.6 (range 0.2 to 0.8)
-              const opacity = 0.2 + Math.min(d.intensity, 1) * 0.6;
+              // Opacity: base 0.2 + normalized intensity * 0.6 (range 0.2 to 0.8)
+              const normalizedForOpacity = Math.min(d.intensity, maxIntensityForOpacity) / maxIntensityForOpacity;
+              const opacity = 0.2 + normalizedForOpacity * 0.6;
               const isFirst = i === 0;
               const isLast = i === dayCount - 1;
               // Use clip-path for proper corner rounding on first/last
@@ -740,12 +743,15 @@ export class GanttPanel {
             .join("");
 
           // Generate step function path (horizontal line per day, step at boundaries)
+          // Scale intensity to 0-1 range where 1.5 (max stored) = full height
+          const maxIntensity = 1.5;
           const stepPoints: string[] = [];
           intensities.forEach((d, i) => {
             const dayStartX = startX + i * segmentWidth;
             const dayEndX = startX + (i + 1) * segmentWidth;
-            // Line Y: bottom of bar (y + barHeight) minus intensity * barHeight
-            const py = y + barHeight - Math.min(d.intensity, 1) * (barHeight - 4);
+            // Line Y: bottom of bar minus normalized intensity * bar height
+            const normalizedIntensity = Math.min(d.intensity, maxIntensity) / maxIntensity;
+            const py = y + barHeight - normalizedIntensity * (barHeight - 4);
             if (i === 0) {
               // Move to start of first day
               stepPoints.push(`M ${dayStartX.toFixed(1)},${py.toFixed(1)}`);
@@ -754,7 +760,8 @@ export class GanttPanel {
             stepPoints.push(`H ${dayEndX.toFixed(1)}`);
             // Step to next day's height (if not last day)
             if (i < intensities.length - 1) {
-              const nextPy = y + barHeight - Math.min(intensities[i + 1].intensity, 1) * (barHeight - 4);
+              const nextNormalized = Math.min(intensities[i + 1].intensity, maxIntensity) / maxIntensity;
+              const nextPy = y + barHeight - nextNormalized * (barHeight - 4);
               stepPoints.push(`V ${nextPy.toFixed(1)}`);
             }
           });
@@ -1185,13 +1192,14 @@ export class GanttPanel {
         labelsColumn.scrollTop = timelineColumn.scrollTop;
         // Sync horizontal with header
         timelineHeader.scrollLeft = timelineColumn.scrollLeft;
-        scrollSyncing = false;
+        // Delay reset to prevent cascade from synced scroll events
+        requestAnimationFrame(() => { scrollSyncing = false; });
       });
       labelsColumn.addEventListener('scroll', () => {
         if (scrollSyncing) return;
         scrollSyncing = true;
         timelineColumn.scrollTop = labelsColumn.scrollTop;
-        scrollSyncing = false;
+        requestAnimationFrame(() => { scrollSyncing = false; });
       });
     }
 
@@ -1285,48 +1293,45 @@ export class GanttPanel {
       });
     });
 
-    // Handle click on bar (open issue) - only if not dragging
-    document.querySelectorAll('.issue-bar .bar-main').forEach(bar => {
-      bar.addEventListener('click', (e) => {
-        if (dragState) return;
-        const issueId = parseInt(bar.closest('.issue-bar').dataset.issueId);
-        vscode.postMessage({ command: 'openIssue', issueId });
-      });
-    });
-
     // Linking mode state
     let linkingState = null;
 
-    // Alt+click on bar to start linking mode
-    document.querySelectorAll('.issue-bar .bar-main').forEach(bar => {
+    // Handle click on bar (open issue or linking) - use bar-outline which always exists
+    document.querySelectorAll('.issue-bar .bar-outline').forEach(bar => {
       bar.addEventListener('click', (e) => {
-        if (!e.altKey) return;
-        e.stopPropagation();
+        if (dragState) return;
         const issueBar = bar.closest('.issue-bar');
         const issueId = parseInt(issueBar.dataset.issueId);
 
-        if (!linkingState) {
-          // Start linking mode
-          linkingState = { fromId: issueId, fromBar: issueBar };
-          issueBar.classList.add('linking-source');
-          document.body.style.cursor = 'crosshair';
-        } else if (linkingState.fromId !== issueId) {
-          // Complete link to different issue
-          const relationType = prompt('Relation type: (b)locks, (p)recedes, or (f)ollows?', 'b');
-          if (relationType) {
-            const input = relationType.toLowerCase();
-            const type = input.startsWith('p') ? 'precedes' : input.startsWith('f') ? 'follows' : 'blocks';
-            saveState();
-            vscode.postMessage({
-              command: 'createRelation',
-              issueId: linkingState.fromId,
-              targetIssueId: issueId,
-              relationType: type
-            });
+        if (e.altKey) {
+          // Alt+click: linking mode
+          e.stopPropagation();
+          if (!linkingState) {
+            // Start linking mode
+            linkingState = { fromId: issueId, fromBar: issueBar };
+            issueBar.classList.add('linking-source');
+            document.body.style.cursor = 'crosshair';
+          } else if (linkingState.fromId !== issueId) {
+            // Complete link to different issue
+            const relationType = prompt('Relation type: (b)locks, (p)recedes, or (f)ollows?', 'b');
+            if (relationType) {
+              const input = relationType.toLowerCase();
+              const type = input.startsWith('p') ? 'precedes' : input.startsWith('f') ? 'follows' : 'blocks';
+              saveState();
+              vscode.postMessage({
+                command: 'createRelation',
+                issueId: linkingState.fromId,
+                targetIssueId: issueId,
+                relationType: type
+              });
+            }
+            linkingState.fromBar.classList.remove('linking-source');
+            linkingState = null;
+            document.body.style.cursor = '';
           }
-          linkingState.fromBar.classList.remove('linking-source');
-          linkingState = null;
-          document.body.style.cursor = '';
+        } else {
+          // Normal click: open issue
+          vscode.postMessage({ command: 'openIssue', issueId });
         }
       });
     });
@@ -1600,10 +1605,10 @@ export class GanttPanel {
           (maxDate.getTime() - minDate.getTime())) *
           (svgWidth - leftMargin);
 
-      const dayOfWeek = current.getDay();
-      const dayOfMonth = current.getDate();
-      const month = current.getMonth();
-      const year = current.getFullYear();
+      const dayOfWeek = current.getUTCDay();
+      const dayOfMonth = current.getUTCDate();
+      const month = current.getUTCMonth();
+      const year = current.getUTCFullYear();
       const quarter = Math.floor(month / 3) + 1;
 
       // Workload heatmap backgrounds (when enabled)
