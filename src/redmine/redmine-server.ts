@@ -437,6 +437,36 @@ export class RedmineServer {
     );
   }
 
+  /**
+   * Create a relation between two issues
+   */
+  createRelation(
+    issueId: number,
+    targetIssueId: number,
+    relationType: "blocks" | "precedes" | "relates"
+  ): Promise<unknown> {
+    return this.doRequest(
+      `/issues/${issueId}/relations.json`,
+      "POST",
+      Buffer.from(
+        JSON.stringify({
+          relation: {
+            issue_to_id: targetIssueId,
+            relation_type: relationType,
+          },
+        }),
+        "utf8"
+      )
+    );
+  }
+
+  /**
+   * Delete a relation by ID
+   */
+  deleteRelation(relationId: number): Promise<unknown> {
+    return this.doRequest(`/relations/${relationId}.json`, "DELETE");
+  }
+
   issueStatuses: { issue_statuses: RedmineIssueStatus[] } | null = null;
 
   /**

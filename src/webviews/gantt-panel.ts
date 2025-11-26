@@ -13,6 +13,7 @@ const ZOOM_PIXELS_PER_DAY: Record<ZoomLevel, number> = {
 };
 
 interface GanttRelation {
+  id: number;
   targetId: number;
   type: "blocks" | "precedes";
 }
@@ -278,6 +279,7 @@ export class GanttPanel {
         relations: (i.relations || [])
           .filter((r) => r.relation_type === "blocks" || r.relation_type === "precedes")
           .map((r) => ({
+            id: r.id,
             targetId: r.issue_to_id,
             type: r.relation_type as "blocks" | "precedes",
           })),
@@ -296,6 +298,9 @@ export class GanttPanel {
     startDate?: string | null;
     dueDate?: string | null;
     zoomLevel?: ZoomLevel;
+    relationId?: number;
+    targetIssueId?: number;
+    relationType?: "blocks" | "precedes";
   }): void {
     switch (message.command) {
       case "openIssue":
@@ -321,6 +326,16 @@ export class GanttPanel {
         if (message.zoomLevel) {
           this._zoomLevel = message.zoomLevel;
           this._updateContent();
+        }
+        break;
+      case "deleteRelation":
+        if (message.relationId && this._server) {
+          this._deleteRelation(message.relationId);
+        }
+        break;
+      case "createRelation":
+        if (message.issueId && message.targetIssueId && message.relationType && this._server) {
+          this._createRelation(message.issueId, message.targetIssueId, message.relationType);
         }
         break;
     }
@@ -357,6 +372,59 @@ export class GanttPanel {
       this._updateContent();
       vscode.window.showErrorMessage(
         `Failed to update dates: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async _deleteRelation(relationId: number): Promise<void> {
+    if (!this._server) return;
+
+    try {
+      await this._server.deleteRelation(relationId);
+      // Remove from local data and re-render
+      for (const issue of this._issues) {
+        issue.relations = issue.relations.filter((r) => r.id !== relationId);
+      }
+      this._updateContent();
+      const statusBar = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Right
+      );
+      statusBar.text = "$(check) Relation deleted";
+      statusBar.show();
+      setTimeout(() => {
+        statusBar.hide();
+        statusBar.dispose();
+      }, 2000);
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Failed to delete relation: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async _createRelation(
+    issueId: number,
+    targetIssueId: number,
+    relationType: "blocks" | "precedes"
+  ): Promise<void> {
+    if (!this._server) return;
+
+    try {
+      await this._server.createRelation(issueId, targetIssueId, relationType);
+      // Refresh by triggering a full reload via VS Code command
+      vscode.commands.executeCommand("redmine.refreshIssues");
+      const statusBar = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Right
+      );
+      statusBar.text = `$(check) ${relationType === "blocks" ? "Blocks" : "Precedes"} relation created`;
+      statusBar.show();
+      setTimeout(() => {
+        statusBar.hide();
+        statusBar.dispose();
+      }, 2000);
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Failed to create relation: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -558,11 +626,13 @@ export class GanttPanel {
               : `M ${x2} ${y2} l ${arrowSize} -${arrowSize / 2} v ${arrowSize} Z`;
 
           const color = rel.type === "blocks" ? "var(--vscode-charts-orange)" : "var(--vscode-charts-purple)";
+          const typeLabel = rel.type === "blocks" ? "blocks" : "precedes";
 
           return `
-            <g class="dependency-arrow" data-from="${issue.id}" data-to="${rel.targetId}">
+            <g class="dependency-arrow" data-relation-id="${rel.id}" data-from="${issue.id}" data-to="${rel.targetId}" style="cursor: pointer;">
               <path d="${path}" stroke="${color}" stroke-width="1.5" fill="none" opacity="0.7"/>
               <path d="${arrowHead}" fill="${color}" opacity="0.7"/>
+              <title>#${issue.id} ${typeLabel} #${rel.targetId} (right-click to delete)</title>
             </g>
           `;
         })
@@ -809,6 +879,19 @@ export class GanttPanel {
     });
     document.getElementById('zoomMonth').addEventListener('click', () => {
       vscode.postMessage({ command: 'setZoom', zoomLevel: 'month' });
+    });
+
+    // Right-click on dependency arrow to delete
+    document.querySelectorAll('.dependency-arrow').forEach(arrow => {
+      arrow.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const relationId = parseInt(arrow.dataset.relationId);
+        const fromId = arrow.dataset.from;
+        const toId = arrow.dataset.to;
+        if (confirm('Delete relation from #' + fromId + ' to #' + toId + '?')) {
+          vscode.postMessage({ command: 'deleteRelation', relationId });
+        }
+      });
     });
 
     // Convert x position to date string (YYYY-MM-DD)
