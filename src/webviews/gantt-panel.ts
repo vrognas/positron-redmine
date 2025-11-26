@@ -678,7 +678,7 @@ export class GanttPanel {
         ].join("\n");
 
         return `
-          <g class="issue-label" data-issue-id="${issue.id}" style="cursor: pointer;">
+          <g class="issue-label" data-issue-id="${issue.id}" tabindex="0" role="button" aria-label="Open issue #${issue.id}" style="cursor: pointer;">
             <text x="${5 + indent}" y="${y + barHeight / 2 + 5}" fill="var(--vscode-foreground)" font-size="12">
               #${issue.id} ${escapedSubject}
             </text>
@@ -798,7 +798,8 @@ export class GanttPanel {
           <g class="issue-bar${isPast ? " bar-past" : ""}" data-issue-id="${issue.id}"
              data-start-date="${issue.start_date || ""}"
              data-due-date="${issue.due_date || ""}"
-             data-start-x="${startX}" data-end-x="${endX}">
+             data-start-x="${startX}" data-end-x="${endX}"
+             tabindex="0" role="button" aria-label="#${issue.id} ${escapedSubject}">
             ${hasIntensity ? `
               <!-- Intensity segments -->
               <g class="bar-intensity">${intensitySegments}</g>
@@ -1105,7 +1106,13 @@ export class GanttPanel {
     .temp-link-arrow { pointer-events: none; }
     .relation-picker { position: fixed; background: var(--vscode-dropdown-background); border: 1px solid var(--vscode-dropdown-border); border-radius: 4px; padding: 4px 0; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     .relation-picker button { display: block; width: 100%; padding: 6px 12px; border: none; background: transparent; color: var(--vscode-dropdown-foreground); text-align: left; cursor: pointer; font-size: 12px; }
-    .relation-picker button:hover { background: var(--vscode-list-hoverBackground); }
+    .relation-picker button:hover, .relation-picker button:focus { background: var(--vscode-list-hoverBackground); }
+    /* Focus indicators for accessibility */
+    button:focus { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
+    .issue-bar:focus-within .bar-outline, .issue-bar.focused .bar-outline { stroke-width: 3; stroke: var(--vscode-focusBorder); }
+    .issue-label:focus { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+    /* Screen reader only class */
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
     .weekend-bg { fill: var(--vscode-editor-inactiveSelectionBackground); opacity: 0.3; }
     .day-grid { stroke: var(--vscode-editorRuler-foreground); stroke-width: 0.5; opacity: 0.3; }
     .date-marker { stroke: var(--vscode-editorRuler-foreground); stroke-dasharray: 2,2; }
@@ -1113,6 +1120,7 @@ export class GanttPanel {
   </style>
 </head>
 <body>
+  <div id="liveRegion" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
   <div class="gantt-header">
     <h2>Timeline</h2>
     <div class="gantt-actions">
@@ -1123,7 +1131,7 @@ export class GanttPanel {
         <button id="zoomQuarter" class="${this._zoomLevel === "quarter" ? "active" : ""}" title="Quarter view">Quarter</button>
         <button id="zoomYear" class="${this._zoomLevel === "year" ? "active" : ""}" title="Year view">Year</button>
       </div>
-      <button id="heatmapBtn" class="${this._showWorkloadHeatmap ? "active" : ""}" title="Toggle workload heatmap">Heatmap</button>
+      <button id="heatmapBtn" class="${this._showWorkloadHeatmap ? "active" : ""}" title="Toggle workload heatmap" aria-pressed="${this._showWorkloadHeatmap}">Heatmap</button>
       <div class="heatmap-legend" style="${this._showWorkloadHeatmap ? "" : "display: none;"}">
         <span class="heatmap-legend-item"><span class="heatmap-legend-color" style="background: var(--vscode-charts-green);"></span>&lt;80%</span>
         <span class="heatmap-legend-item"><span class="heatmap-legend-color" style="background: var(--vscode-charts-yellow);"></span>80-100%</span>
@@ -1434,6 +1442,14 @@ export class GanttPanel {
       }, 0);
     }
 
+    // Announce to screen readers
+    function announce(message) {
+      const liveRegion = document.getElementById('liveRegion');
+      if (liveRegion) {
+        liveRegion.textContent = message;
+      }
+    }
+
     // Handle click on bar (open issue) - use bar-outline which always exists
     document.querySelectorAll('.issue-bar .bar-outline').forEach(bar => {
       bar.addEventListener('click', (e) => {
@@ -1441,6 +1457,26 @@ export class GanttPanel {
         const issueBar = bar.closest('.issue-bar');
         const issueId = parseInt(issueBar.dataset.issueId);
         vscode.postMessage({ command: 'openIssue', issueId });
+      });
+    });
+
+    // Keyboard navigation for issue bars
+    const issueBars = Array.from(document.querySelectorAll('.issue-bar'));
+    issueBars.forEach((bar, index) => {
+      bar.addEventListener('keydown', (e) => {
+        const issueId = parseInt(bar.dataset.issueId);
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          vscode.postMessage({ command: 'openIssue', issueId });
+        } else if (e.key === 'ArrowDown' && index < issueBars.length - 1) {
+          e.preventDefault();
+          issueBars[index + 1].focus();
+          announce(\`Issue \${issueBars[index + 1].getAttribute('aria-label')}\`);
+        } else if (e.key === 'ArrowUp' && index > 0) {
+          e.preventDefault();
+          issueBars[index - 1].focus();
+          announce(\`Issue \${issueBars[index - 1].getAttribute('aria-label')}\`);
+        }
       });
     });
 
@@ -1490,11 +1526,18 @@ export class GanttPanel {
       }
     });
 
-    // Labels click
+    // Labels click and keyboard
     document.querySelectorAll('.issue-label').forEach(el => {
       el.addEventListener('click', () => {
         const issueId = parseInt(el.dataset.issueId);
         vscode.postMessage({ command: 'openIssue', issueId });
+      });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const issueId = parseInt(el.dataset.issueId);
+          vscode.postMessage({ command: 'openIssue', issueId });
+        }
       });
     });
 
