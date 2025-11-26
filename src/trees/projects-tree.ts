@@ -280,7 +280,7 @@ export class ProjectsTree implements vscode.TreeDataProvider<TreeItem> {
    */
   private countIssuesWithSubprojects(projectId: number): number {
     const direct = this.issuesByProject.get(projectId)?.length || 0;
-    const subprojects = this.projects.filter((p) => p.parent?.id === projectId);
+    const subprojects = (this.projects || []).filter((p) => p.parent?.id === projectId);
     const subCount = subprojects.reduce(
       (sum, sub) => sum + this.countIssuesWithSubprojects(sub.id),
       0

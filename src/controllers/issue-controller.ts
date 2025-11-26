@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { QuickUpdate, Membership, IssueStatus } from "./domain";
 import { RedmineServer } from "../redmine/redmine-server";
-import { Issue, Journal } from "../redmine/models/issue";
+import { Issue } from "../redmine/models/issue";
 import { IssueStatus as RedmineIssueStatus } from "../redmine/models/issue-status";
 import { TimeEntryActivity } from "../redmine/models/time-entry-activity";
 import { errorToString } from "../utilities/error-to-string";
