@@ -937,9 +937,8 @@ export function activate(context: vscode.ExtensionContext): void {
               });
               createdIssues.set(issue.subject, result.issue.id);
               created++;
-            } catch (e) {
+            } catch (_e) {
               failed++;
-              console.error(`Failed to create ${issue.subject}:`, e);
             }
           }
 
@@ -949,8 +948,8 @@ export function activate(context: vscode.ExtensionContext): void {
           if (blockingId && blockedId) {
             try {
               await server.createRelation(blockingId, blockedId, "blocks");
-            } catch (e) {
-              console.error("Failed to create blocking relation:", e);
+            } catch {
+              // Relation creation failed - non-critical, continue
             }
           }
 

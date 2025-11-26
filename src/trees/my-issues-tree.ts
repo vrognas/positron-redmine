@@ -237,7 +237,6 @@ export class MyIssuesTree implements vscode.TreeDataProvider<TreeItem> {
           }
         } catch {
           // Parent fetch failed - show children at root level
-          console.warn("Failed to fetch parent containers");
         }
       }
 
