@@ -46,6 +46,8 @@ interface GanttRow {
   label: string;
   depth: number;
   issue?: GanttIssue;
+  /** True if this issue has subtasks (dates/hours are derived) */
+  isParent?: boolean;
 }
 
 /**
@@ -97,12 +99,15 @@ function buildHierarchicalRows(issues: GanttIssue[]): GanttRow[] {
     function addIssues(parentId: number | null, depth: number) {
       const childIssues = children.get(parentId) || [];
       for (const issue of childIssues) {
+        // Check if this issue has children (is a parent)
+        const hasChildren = children.has(issue.id) && children.get(issue.id)!.length > 0;
         rows.push({
           type: "issue",
           id: issue.id,
           label: issue.subject,
           depth,
           issue,
+          isParent: hasChildren,
         });
         addIssues(issue.id, depth + 1);
       }
@@ -697,6 +702,7 @@ export class GanttPanel {
         }
 
         const issue = row.issue!;
+        const isParent = row.isParent ?? false;
         const start = issue.start_date
           ? new Date(issue.start_date)
           : new Date(issue.due_date!);
@@ -719,7 +725,7 @@ export class GanttPanel {
 
         const width = Math.max(10, endX - startX);
         const y = index * (barHeight + barGap); // Y starts at 0 in body SVG
-        const color = this._getStatusColor(issue.status);
+        const color = isParent ? "var(--vscode-descriptionForeground)" : this._getStatusColor(issue.status);
         const isPast = end < today;
 
         // Calculate past portion (from start to today)
@@ -727,10 +733,10 @@ export class GanttPanel {
           ((today.getTime() - minDate.getTime()) /
             (maxDate.getTime() - minDate.getTime())) *
           timelineWidth;
-        // Past portion: from bar start to min(todayX, barEnd)
+        // Past portion: from bar start to min(todayX, barEnd) - skip for parent issues
         const pastEndX = Math.min(todayX, endX);
         const pastWidth = Math.max(0, pastEndX - startX);
-        const hasPastPortion = start < today && pastWidth > 0;
+        const hasPastPortion = !isParent && start < today && pastWidth > 0;
 
         const escapedSubject = escapeHtml(issue.subject);
         const escapedProject = escapeHtml(issue.project);
@@ -745,9 +751,9 @@ export class GanttPanel {
 
         const handleWidth = 8;
 
-        // Calculate daily intensity for this issue
-        const intensities = calculateDailyIntensity(issue, this._schedule);
-        const hasIntensity = intensities.length > 0 && issue.estimated_hours !== null;
+        // Calculate daily intensity for this issue (skip for parent issues - work is in subtasks)
+        const intensities = isParent ? [] : calculateDailyIntensity(issue, this._schedule);
+        const hasIntensity = !isParent && intensities.length > 0 && issue.estimated_hours !== null;
 
         // Generate intensity segments and line chart
         let intensitySegments = "";
@@ -802,6 +808,29 @@ export class GanttPanel {
           intensityLine = `<path d="${stepPoints.join(" ")}"
                                  fill="none" stroke="var(--vscode-editor-foreground)"
                                  stroke-width="1.5" opacity="0.7"/>`;
+        }
+
+        // Parent issues: summary bar (no fill, no drag, no link handle)
+        if (isParent) {
+          return `
+            <g class="issue-bar parent-bar" data-issue-id="${issue.id}"
+               data-start-date="${issue.start_date || ""}"
+               data-due-date="${issue.due_date || ""}"
+               data-start-x="${startX}" data-end-x="${endX}"
+               tabindex="0" role="button" aria-label="#${issue.id} ${escapedSubject} (parent)">
+              <!-- Summary bar: bracket-style with downward arrows at ends -->
+              <path class="bar-outline" d="M ${startX + 4} ${y + barHeight * 0.3}
+                    L ${startX + 4} ${y + barHeight * 0.7}
+                    L ${startX} ${y + barHeight}
+                    M ${startX + 4} ${y + barHeight * 0.5}
+                    H ${endX - 4}
+                    M ${endX - 4} ${y + barHeight * 0.3}
+                    L ${endX - 4} ${y + barHeight * 0.7}
+                    L ${endX} ${y + barHeight}"
+                    fill="none" stroke="${color}" stroke-width="2" opacity="0.8" style="cursor: pointer;"/>
+              <title>${tooltip} (parent - dates derived from subtasks)</title>
+            </g>
+          `;
         }
 
         return `
@@ -1111,6 +1140,8 @@ export class GanttPanel {
     .issue-bar:hover .bar-intensity rect { filter: brightness(1.1); }
     .issue-bar.bar-past { filter: saturate(0.4) opacity(0.7); }
     .issue-bar.bar-past:hover { filter: saturate(0.6) opacity(0.85); }
+    .issue-bar.parent-bar { opacity: 0.7; }
+    .issue-bar.parent-bar:hover { opacity: 1; }
     .past-overlay { pointer-events: none; }
     .issue-bar .drag-handle:hover { fill: var(--vscode-list-hoverBackground); }
     .issue-bar:hover .link-handle { opacity: 0.7; }
