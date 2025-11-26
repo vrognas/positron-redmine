@@ -575,9 +575,23 @@ export class GanttPanel {
       vscode.commands.executeCommand("redmine.refreshIssues");
       showStatusBarMessage(`$(check) ${labels[relationType]} relation created`, 2000);
     } catch (error) {
-      vscode.window.showErrorMessage(
-        `Failed to create relation: ${error instanceof Error ? error.message : String(error)}`
-      );
+      const msg = error instanceof Error ? error.message : String(error);
+      // Map Redmine validation errors to user-friendly messages
+      const friendlyMessages: Record<string, string> = {
+        "doesn't belong to the same project": "Issues must be in the same project",
+        "cannot be linked to one of its subtasks": "Cannot link parent to its subtask",
+        "cannot be linked to one of its ancestors": "Cannot link to ancestor issue",
+        "already exists": "This relation already exists",
+        "is invalid": "Invalid relation type",
+      };
+      let friendly = msg;
+      for (const [pattern, replacement] of Object.entries(friendlyMessages)) {
+        if (msg.toLowerCase().includes(pattern.toLowerCase())) {
+          friendly = replacement;
+          break;
+        }
+      }
+      vscode.window.showErrorMessage(`Cannot create relation: ${friendly}`);
     }
   }
 
