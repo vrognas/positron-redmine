@@ -1674,8 +1674,14 @@ ${style.tip}
 
       const picker = document.createElement('div');
       picker.className = 'relation-picker';
-      picker.style.left = x + 'px';
-      picker.style.top = y + 'px';
+
+      // Clamp position to viewport bounds
+      const pickerWidth = 150;
+      const pickerHeight = 100;
+      const clampedX = Math.min(x, window.innerWidth - pickerWidth - 10);
+      const clampedY = Math.min(y, window.innerHeight - pickerHeight - 10);
+      picker.style.left = Math.max(10, clampedX) + 'px';
+      picker.style.top = Math.max(10, clampedY) + 'px';
 
       const label = document.createElement('div');
       label.style.padding = '6px 12px';
@@ -1787,8 +1793,14 @@ ${style.tip}
 
       const picker = document.createElement('div');
       picker.className = 'relation-picker';
-      picker.style.left = x + 'px';
-      picker.style.top = y + 'px';
+
+      // Clamp position to viewport bounds (picker is ~180px wide, ~200px tall)
+      const pickerWidth = 180;
+      const pickerHeight = 200;
+      const clampedX = Math.min(x, window.innerWidth - pickerWidth - 10);
+      const clampedY = Math.min(y, window.innerHeight - pickerHeight - 10);
+      picker.style.left = Math.max(10, clampedX) + 'px';
+      picker.style.top = Math.max(10, clampedY) + 'px';
 
       const types = [
         { value: 'blocks', label: '🚫 Blocks', color: '#e74c3c',
@@ -1917,10 +1929,14 @@ ${style.tip}
       });
     });
 
-    // Escape to cancel linking mode
+    // Escape to cancel linking mode and close pickers
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && linkingState) {
-        cancelLinking();
+      if (e.key === 'Escape') {
+        if (linkingState) {
+          cancelLinking();
+        }
+        // Close any open picker
+        document.querySelector('.relation-picker')?.remove();
       }
     });
 
@@ -2027,7 +2043,10 @@ ${style.tip}
         const fromId = linkingState.fromId;
         if (currentTarget) {
           const toId = parseInt(currentTarget.dataset.issueId);
-          showRelationPicker(e.clientX, e.clientY, fromId, toId);
+          // Prevent self-referential relations
+          if (fromId !== toId) {
+            showRelationPicker(e.clientX, e.clientY, fromId, toId);
+          }
         }
         cancelLinking();
       }
