@@ -973,23 +973,28 @@ export class GanttPanel {
 
           const style = relationStyles[rel.type] || relationStyles.relates;
           const arrowSize = 6;
-          const gap = 12; // Horizontal gap before turning
 
           // Determine if we need to go right or route around (target overlaps/left of source)
           const goingRight = x2 > x1;
+          const sameRow = Math.abs(y2 - y1) < 5;
+
+          // Calculate available horizontal space between source end and target start
+          const horizontalGap = x2 - x1;
 
           let path: string;
 
-          if (goingRight && Math.abs(y2 - y1) < 5) {
+          if (goingRight && sameRow) {
             // Same row, target to right - straight line
             path = `M ${x1} ${y1} L ${x2 - arrowSize} ${y2}`;
           } else if (goingRight) {
-            // Target to the right, different row - simple elbow
-            const midX = x1 + gap;
+            // Target to the right, different row - elbow path
+            // Use dynamic gap: half the available space, clamped between 8-20px
+            const elbowGap = Math.max(8, Math.min(20, horizontalGap / 2));
+            const midX = x1 + elbowGap;
             path = `M ${x1} ${y1} H ${midX} V ${y2} H ${x2 - arrowSize}`;
           } else {
-            // Target overlaps or is to the left - route around
-            // Go right, then up/down to clear bars, then left to target.startX
+            // Target overlaps or is to the left - route around bars
+            const gap = 12;
             const midX = x1 + gap;
             const routeY = y2 > y1 ? Math.max(y1, y2) + barHeight : Math.min(y1, y2) - barHeight;
             // Route: right → vertical to clear → left past target → vertical to row → right to target.start
