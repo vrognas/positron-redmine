@@ -39,10 +39,10 @@ const STATUS_CONFIG = {
 
 /**
  * Determines if an issue is billable based on tracker name.
- * Currently: tracker name "Task" = billable
+ * Currently: tracker name "Tasks" = billable
  */
 function isBillable(issue: Issue): boolean {
-  return issue.tracker?.name === "Task";
+  return issue.tracker?.name === "Tasks";
 }
 
 /**
