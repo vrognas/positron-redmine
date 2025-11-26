@@ -95,8 +95,9 @@ export class IssueController {
 
     try {
       await this.redmine.setIssueStatus(this.issue, stat.fullIssue.id);
-      vscode.window.showInformationMessage(
-        `Issue #${this.issue.id} status changed to ${stat.fullIssue.name}`
+      showStatusBarMessage(
+        `$(check) #${this.issue.id} → ${stat.fullIssue.name}`,
+        2000
       );
     } catch (error) {
       vscode.window.showErrorMessage(errorToString(error));
@@ -203,7 +204,7 @@ export class IssueController {
     try {
       const updateResult = await this.redmine.applyQuickUpdate(quickUpdate);
       if (updateResult.isSuccessful()) {
-        vscode.window.showInformationMessage("Issue updated");
+        showStatusBarMessage("$(check) Issue updated", 2000);
       } else {
         vscode.window.showErrorMessage(
           `Issue updated partially; problems: \n${updateResult.differences.join(

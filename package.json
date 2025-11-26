@@ -16,7 +16,7 @@
     "node": ">=20.0.0"
   },
   "categories": [
-    "Other"
+    "Project Management"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -64,12 +64,12 @@
       },
       {
         "command": "redmine.toggleTreeView",
-        "title": "Toggle Project View: Tree",
+        "title": "Redmine: Toggle Tree View",
         "icon": "$(list-tree)"
       },
       {
         "command": "redmine.toggleListView",
-        "title": "Toggle Project View: List",
+        "title": "Redmine: Toggle List View",
         "icon": "$(list-flat)"
       },
       {
@@ -125,7 +125,7 @@
       "redmine-explorer": [
         {
           "id": "redmine-explorer-projects",
-          "name": "Projects"
+          "name": "My Issues"
         },
         {
           "id": "redmine-explorer-my-time-entries",
