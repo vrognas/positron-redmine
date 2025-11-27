@@ -16,7 +16,7 @@
     "node": ">=20.0.0"
   },
   "categories": [
-    "Project Management"
+    "Other"
   ],
   "activationEvents": [
     "onStartupFinished"
