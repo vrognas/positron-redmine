@@ -16,6 +16,7 @@ All notable changes to the "vscode-redmine" extension will be documented in this
 
 ### Fixed
 
+- **Positron stable compatibility** - lowered VS Code engine from 1.106 to 1.105
 - **Billable tracker detection** - now matches "Tasks" (was "Task")
 
 ---
